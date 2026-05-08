@@ -288,7 +288,7 @@
                         <span class="section-tag">05 / CERTIFICATES</span>
                         <h2>CERTIFICATES</h2>
                     </div>
-                    <div class="certs-grid" id="certsRoot"></div>
+                    <div id="certsRoot"></div>
                 </div>
             </div>
         </section>
@@ -531,6 +531,25 @@
             </button>
 
             <div class="doc-upload-status" id="milestoneAddStatus"></div>
+        </div>
+    </div>
+
+    <!-- MILESTONE DELETE CONFIRM MODAL -->
+    <div class="faq-overlay milestone-delete-overlay" id="milestoneDeleteOverlay">
+        <div class="faq-card milestone-delete-card" id="milestoneDeleteCard">
+            <button class="faq-close" id="milestoneDeleteClose"><i class="fa-solid fa-xmark"></i></button>
+            <div class="milestone-delete-body">
+                <i class="fa-solid fa-triangle-exclamation milestone-delete-icon"></i>
+                <div class="milestone-delete-heading">ARE YOU SURE?</div>
+                <div class="milestone-delete-sub">The milestone you wanted to delete is <strong id="milestoneDeleteTitle"></strong>.</div>
+                <div class="milestone-delete-note">This cannot be undone.</div>
+            </div>
+            <div class="milestone-delete-actions">
+                <button type="button" class="milestone-delete-cancel" id="milestoneDeleteCancel">CANCEL</button>
+                <button type="button" class="milestone-delete-confirm" id="milestoneDeleteConfirm">
+                    <i class="fa-solid fa-trash"></i> YES, DELETE
+                </button>
+            </div>
         </div>
     </div>
 

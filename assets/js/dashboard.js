@@ -113,7 +113,7 @@ async function loadAllData() {
             const d = snap.data();
             FETCHED_ABOUT = {
                 bio:         d.bio         || {},
-                education:   d.education   || {},
+                education:   d.education   || [],
                 proficiency: d.proficiency || [],
             };
         }
@@ -391,6 +391,7 @@ function renderTimeline() {
         const year    = raw
             ? parseInt(raw.split('-')[0])
             : (entry.year || new Date().getFullYear());
+        const month   = raw && raw.includes('-') ? (parseInt(raw.split('-')[1]) || 0) : 0;
         const d       = raw && raw.includes('-') ? new Date(raw + (raw.split('-').length === 2 ? '-01' : '')) : null;
         const dateStr = d
             ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
@@ -398,6 +399,7 @@ function renderTimeline() {
 
         allEntries.push({
             year,
+            month,
             title: entry.title,
             date:  dateStr,
             desc:  entry.desc || '',
@@ -412,6 +414,7 @@ function renderTimeline() {
         const year    = raw
             ? parseInt(raw.split('-')[0])
             : (info.year || new Date().getFullYear());
+        const month   = raw ? (parseInt(raw.split('-')[1]) || 0) : 0;
         const d       = raw ? new Date(raw + '-01') : null;
         const dateStr = d
             ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
@@ -419,6 +422,7 @@ function renderTimeline() {
 
         allEntries.push({
             year,
+            month,
             title: info.name,
             date:  dateStr,
             desc:  info.description || '',
@@ -430,6 +434,7 @@ function renderTimeline() {
     // 3. Cert entries auto-generated from FETCHED_CERTS
     FETCHED_CERTS.forEach(cert => {
         const year    = cert.date ? parseInt(cert.date.split('-')[0]) : new Date().getFullYear();
+        const month   = cert.date ? (parseInt(cert.date.split('-')[1]) || 0) : 0;
         const d       = cert.date ? new Date(cert.date + '-01') : null;
         const dateStr = d
             ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
@@ -437,6 +442,7 @@ function renderTimeline() {
 
         allEntries.push({
             year,
+            month,
             title: cert.title,
             date:  dateStr,
             desc:  cert.company ? `Issued by ${cert.company}` : (cert.details || ''),
@@ -450,18 +456,20 @@ function renderTimeline() {
     FETCHED_MILESTONES.forEach(m => {
         const raw = m.date || null;
         let year    = new Date().getFullYear();
+        let month   = 0;
         let dateStr = '';
         if (raw) {
             const parts = raw.split('-'); // ['MM', 'DD', 'YYYY']
             if (parts.length === 3) {
                 year        = parseInt(parts[2]);
-                const month = parseInt(parts[0]) - 1;
-                const d     = new Date(year, month, 1);
+                month       = parseInt(parts[0]) || 0;
+                const d     = new Date(year, month - 1, 1);
                 dateStr     = d.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
             }
         }
         allEntries.push({
             year,
+            month,
             title: m.title,
             date:  dateStr,
             desc:  m.desc || '',
@@ -478,6 +486,11 @@ function renderTimeline() {
     });
 
     const sortedYears = Object.keys(byYear).map(Number).sort((a, b) => b - a);
+
+    // Within each year, sort entries by month descending (newest first)
+    sortedYears.forEach(y => {
+        byYear[y].sort((a, b) => (b.month || 0) - (a.month || 0));
+    });
 
     if (sortedYears.length === 0) {
         root.innerHTML = `
@@ -513,12 +526,18 @@ function renderTimeline() {
         entries.forEach(entry => {
             const el = document.createElement('div');
             el.className = 'timeline-entry';
+            if (entry.type === 'milestone') el.classList.add('milestone');
 
             const learnMoreHTML = (entry.type === 'project' || entry.type === 'cert' || entry.type === 'education')
                 ? `<button class="timeline-learn-more">Learn More <i class="fa-solid fa-arrow-right"></i></button>`
                 : '';
 
+            const milestoneDeleteHTML = entry.type === 'milestone'
+                ? `<button class="milestone-delete" title="Delete milestone" aria-label="Delete milestone"><i class="fa-solid fa-xmark"></i></button>`
+                : '';
+
             el.innerHTML = `
+                ${milestoneDeleteHTML}
                 <div class="timeline-entry-body">
                     <span class="timeline-entry-title">${entry.title}</span>
                     ${entry.desc ? `<span class="timeline-entry-desc">${entry.desc}</span>` : ''}
@@ -533,6 +552,7 @@ function renderTimeline() {
 
             el.addEventListener('click', (e) => {
                 if (e.target.closest('.timeline-learn-more')) return;
+                if (e.target.closest('.milestone-delete')) return;
                 const isExpanded = el.classList.contains('expanded');
                 document.querySelectorAll('.timeline-entry.expanded').forEach(c => c.classList.remove('expanded'));
                 if (!isExpanded) el.classList.add('expanded');
@@ -582,6 +602,14 @@ function renderTimeline() {
                             });
                         }, 350);
                     }
+                });
+            }
+
+            const milestoneDeleteBtn = el.querySelector('.milestone-delete');
+            if (milestoneDeleteBtn) {
+                milestoneDeleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openMilestoneDeleteModal(entry);
                 });
             }
 
@@ -852,14 +880,17 @@ async function renderDocs() {
 function setEditMode(active) {
     isEditMode = active;
 
-    const grid = document.getElementById('homeDocsGrid');
+    const grid         = document.getElementById('homeDocsGrid');
+    const timelineRoot = document.getElementById('timelineRoot');
 
     if (active) {
-        if (grid) grid.classList.add('edit-active');
+        if (grid)         grid.classList.add('edit-active');
+        if (timelineRoot) timelineRoot.classList.add('edit-active');
         injectDocUploadBtn();
         injectMilestoneAddBtn();
     } else {
-        if (grid) grid.classList.remove('edit-active');
+        if (grid)         grid.classList.remove('edit-active');
+        if (timelineRoot) timelineRoot.classList.remove('edit-active');
         const btn = document.getElementById('docUploadBtn');
         if (btn) {
             btn.remove();
@@ -1055,6 +1086,70 @@ async function handleMilestoneAdd() {
             milestoneAddSubmit.disabled = false;
             milestoneAddSubmit.innerHTML = '<i class="fa-solid fa-flag-checkered"></i> Save Milestone';
         }
+    }
+}
+
+// ── MILESTONE DELETE MODAL ────────────────────────────────────
+
+let pendingDeleteMilestone = null;
+
+const milestoneDeleteOverlay = document.getElementById('milestoneDeleteOverlay');
+const milestoneDeleteClose   = document.getElementById('milestoneDeleteClose');
+const milestoneDeleteCancel  = document.getElementById('milestoneDeleteCancel');
+const milestoneDeleteConfirm = document.getElementById('milestoneDeleteConfirm');
+const milestoneDeleteTitle   = document.getElementById('milestoneDeleteTitle');
+
+function openMilestoneDeleteModal(data) {
+    pendingDeleteMilestone = data;
+    if (milestoneDeleteTitle) milestoneDeleteTitle.textContent = data.title || 'this milestone';
+    if (milestoneDeleteConfirm) {
+        milestoneDeleteConfirm.disabled = false;
+        milestoneDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
+    }
+    if (milestoneDeleteOverlay) milestoneDeleteOverlay.classList.add('open');
+}
+
+function closeMilestoneDeleteModal() {
+    if (milestoneDeleteOverlay) milestoneDeleteOverlay.classList.remove('open');
+    pendingDeleteMilestone = null;
+}
+
+if (milestoneDeleteClose)  milestoneDeleteClose.addEventListener('click',  closeMilestoneDeleteModal);
+if (milestoneDeleteCancel) milestoneDeleteCancel.addEventListener('click', closeMilestoneDeleteModal);
+if (milestoneDeleteOverlay) {
+    milestoneDeleteOverlay.addEventListener('click', (e) => {
+        if (e.target === milestoneDeleteOverlay) closeMilestoneDeleteModal();
+    });
+}
+
+if (milestoneDeleteConfirm) {
+    milestoneDeleteConfirm.addEventListener('click', handleMilestoneDelete);
+}
+
+async function handleMilestoneDelete() {
+    if (!pendingDeleteMilestone) return;
+    const { id } = pendingDeleteMilestone;
+
+    milestoneDeleteConfirm.disabled = true;
+    milestoneDeleteConfirm.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
+
+    try {
+        const snap      = await getDoc(doc(_dDb, "portfolio", "milestones"));
+        let milestones  = snap.exists() ? (snap.data().data || []) : [];
+        milestones      = milestones.filter(m => m.id !== id);
+
+        await setDoc(doc(_dDb, "portfolio", "milestones"), { data: milestones });
+
+        FETCHED_MILESTONES = milestones;
+
+        closeMilestoneDeleteModal();
+        renderTimeline();
+
+    } catch (err) {
+        console.error('Milestone delete error:', err);
+        milestoneDeleteConfirm.disabled = false;
+        milestoneDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
+        alert(`Delete failed: ${err.message || 'Unknown error'}`);
     }
 }
 
@@ -1313,11 +1408,6 @@ if (docDeleteConfirm) {
 
 async function handleDocDelete() {
     if (!pendingDeleteDoc) return;
-
-    if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
-        alert('GitHub credentials not loaded. Cannot delete.');
-        return;
-    }
 
     const { id, file, type, title } = pendingDeleteDoc;
 
@@ -1681,18 +1771,19 @@ function renderAbout() {
                     No listed education
                 </div>`;
         } else {
+            function parseStoredDate(val) {
+                if (!val) return null;
+                const [mm, dd, yyyy] = val.split('-');
+                if (!mm || !dd || !yyyy) return null;
+                return new Date(`${yyyy}-${mm}-${dd}`);
+            }
+
             eduArr.forEach((edu, idx) => {
                 const card = document.createElement('div');
                 card.className = 'about-edu-card';
                 card.style.marginBottom = idx < eduArr.length - 1 ? '10px' : '';
 
                 // Parse MM-DD-YYYY
-                function parseStoredDate(val) {
-                    if (!val) return null;
-                    const [mm, dd, yyyy] = val.split('-');
-                    if (!mm || !dd || !yyyy) return null;
-                    return new Date(`${yyyy}-${mm}-${dd}`);
-                }
 
                 const now       = new Date();
                 const endDate   = parseStoredDate(edu.schoolEnd);
