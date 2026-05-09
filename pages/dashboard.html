@@ -598,6 +598,72 @@
         </div>
     </div>
 
+    <!-- CERT UPLOAD MODAL -->
+    <div class="faq-overlay cert-upload-overlay" id="certUploadOverlay">
+        <div class="faq-card cert-upload-card" id="certUploadCard">
+            <button class="faq-close" id="certUploadClose"><i class="fa-solid fa-xmark"></i></button>
+            <h3>Add Certificate</h3>
+
+            <div class="doc-drop-zone" id="certDropZone">
+                <input type="file" id="certFileInput" accept=".png,.jpg,.jpeg,.webp" hidden>
+                <i class="fa-solid fa-image doc-drop-icon"></i>
+                <div class="doc-drop-main">Drag &amp; drop your certificate image here</div>
+                <div class="doc-drop-or">or</div>
+                <button type="button" class="doc-drop-browse" id="certDropBrowse">Browse file</button>
+                <div class="doc-drop-hint">PNG, JPG, or WEBP</div>
+            </div>
+
+            <div class="doc-drop-selected" id="certDropSelected">
+                <i class="fa-solid fa-image doc-drop-selected-icon"></i>
+                <span id="certDropFileName">No file selected</span>
+            </div>
+
+            <div class="doc-upload-fields">
+                <div class="doc-upload-field">
+                    <label for="certTitleInput">TITLE</label>
+                    <input type="text" id="certTitleInput" placeholder="Certificate title" autocomplete="off">
+                </div>
+                <div class="doc-upload-field">
+                    <label for="certDetailsInput">DETAILS</label>
+                    <input type="text" id="certDetailsInput" placeholder="e.g. Issued by Google, course name..." autocomplete="off">
+                </div>
+                <div class="doc-upload-field">
+                    <label for="certCompanyInput">COMPANY</label>
+                    <input type="text" id="certCompanyInput" placeholder="e.g. Google, Microsoft..." autocomplete="off">
+                </div>
+                <div class="doc-upload-field">
+                    <label for="certDateInput">DATE</label>
+                    <input type="date" id="certDateInput">
+                </div>
+            </div>
+
+            <button type="button" class="doc-upload-submit" id="certUploadSubmit">
+                <i class="fa-solid fa-cloud-arrow-up"></i> Upload
+            </button>
+
+            <div class="doc-upload-status" id="certUploadStatus"></div>
+        </div>
+    </div>
+
+    <!-- CERT DELETE CONFIRM MODAL -->
+    <div class="faq-overlay cert-delete-overlay" id="certDeleteOverlay">
+        <div class="faq-card cert-delete-card" id="certDeleteCard">
+            <button class="faq-close" id="certDeleteClose"><i class="fa-solid fa-xmark"></i></button>
+            <div class="doc-delete-body">
+                <i class="fa-solid fa-triangle-exclamation doc-delete-icon"></i>
+                <div class="doc-delete-heading">ARE YOU SURE?</div>
+                <div class="doc-delete-sub">The certificate you wanted to delete is <strong id="certDeleteTitle"></strong>.</div>
+                <div class="doc-delete-note">This cannot be undone.</div>
+            </div>
+            <div class="doc-delete-actions">
+                <button type="button" class="doc-delete-cancel" id="certDeleteCancel">CANCEL</button>
+                <button type="button" class="doc-delete-confirm" id="certDeleteConfirm">
+                    <i class="fa-solid fa-trash"></i> YES, DELETE
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script type="module" src="../assets/js/dashboard.js"></script>

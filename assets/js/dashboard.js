@@ -84,10 +84,12 @@ async function loadAllData() {
     } catch {}
 
     // 2. Certs — from Firestore portfolio/certs
+    // Handles both old format { data: { certificates: [] } } and new flat { data: [] }
     try {
         const snap = await getDoc(doc(_dDb, "portfolio", "certs"));
         if (snap.exists()) {
-            FETCHED_CERTS = snap.data().data?.certificates || [];
+            const raw = snap.data().data;
+            FETCHED_CERTS = Array.isArray(raw) ? raw : (raw?.certificates || []);
         }
     } catch {}
 
@@ -430,10 +432,23 @@ function renderTimeline() {
     });
 
     // 3. Cert entries auto-generated from FETCHED_CERTS
+    // date stored as MM-DD-YYYY; legacy entries may be YYYY-MM
     FETCHED_CERTS.forEach(cert => {
-        const year    = cert.date ? parseInt(cert.date.split('-')[0]) : new Date().getFullYear();
-        const month   = cert.date ? (parseInt(cert.date.split('-')[1]) || 0) : 0;
-        const d       = cert.date ? new Date(cert.date + '-01') : null;
+        let year = new Date().getFullYear(), month = 0, d = null;
+        if (cert.date) {
+            const parts = cert.date.split('-');
+            if (parts.length === 3 && parts[2].length === 4) {
+                // MM-DD-YYYY
+                month = parseInt(parts[0]) || 0;
+                year  = parseInt(parts[2]);
+                d     = new Date(year, month - 1, 1);
+            } else if (parts.length === 2) {
+                // Legacy YYYY-MM
+                year  = parseInt(parts[0]);
+                month = parseInt(parts[1]) || 0;
+                d     = new Date(cert.date + '-01');
+            }
+        }
         const dateStr = d
             ? d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
             : String(year);
@@ -894,22 +909,25 @@ function setEditMode(active) {
     const grid         = document.getElementById('homeDocsGrid');
     const timelineRoot = document.getElementById('timelineRoot');
     const projectsRoot = document.getElementById('projectsRoot');
+    const certsRoot    = document.getElementById('certsRoot');
 
     if (active) {
         if (grid)         grid.classList.add('edit-active');
         if (timelineRoot) timelineRoot.classList.add('edit-active');
         if (projectsRoot) projectsRoot.classList.add('edit-active');
+        if (certsRoot)    certsRoot.classList.add('edit-active');
         injectDocUploadBtn();
         injectMilestoneAddBtn();
         injectProjectAddBtn();
+        injectCertAddBtn();
     } else {
         if (grid)         grid.classList.remove('edit-active');
         if (timelineRoot) timelineRoot.classList.remove('edit-active');
         if (projectsRoot) projectsRoot.classList.remove('edit-active');
+        if (certsRoot)    certsRoot.classList.remove('edit-active');
         const btn = document.getElementById('docUploadBtn');
         if (btn) {
             btn.remove();
-            // Restore empty state if grid is now empty
             if (grid && grid.children.length === 0) {
                 grid.innerHTML = `
                     <div data-empty-state style="text-align:center;padding:40px 0;color:rgba(255,255,255,0.2);width:100%;">
@@ -923,11 +941,11 @@ function setEditMode(active) {
         if (mBtn) mBtn.remove();
         const pBtn = document.getElementById('projectAddBtn');
         if (pBtn) pBtn.remove();
+        const cBtn = document.getElementById('certAddBtn');
+        if (cBtn) cBtn.remove();
     }
 
-    // ABOUT section — edu list delete buttons
     _injectEduDeleteBtns();
-
     updateAboutEditBtnVisibility();
 }
 
@@ -1004,7 +1022,20 @@ function injectProjectAddBtn() {
     heading.appendChild(btn);
 }
 
-// ── PROJECT ADD MODAL ─────────────────────────────────────────
+function injectCertAddBtn() {
+    if (document.getElementById('certAddBtn')) return;
+    const heading = document.querySelector('#certificatesContent .section-heading');
+    if (!heading) return;
+    const btn = document.createElement('button');
+    btn.id        = 'certAddBtn';
+    btn.className = 'cert-add-btn';
+    btn.type      = 'button';
+    btn.innerHTML = '<i class="fa-solid fa-plus"></i> Add Certificate';
+    btn.addEventListener('click', openCertUploadModal);
+    heading.appendChild(btn);
+}
+
+// ── CERT UPLOAD MODAL ─────────────────────────────────────────
 
 const projectAddOverlay  = document.getElementById('projectAddOverlay');
 const projectAddClose    = document.getElementById('projectAddClose');
@@ -1093,6 +1124,7 @@ async function handleProjectAdd() {
 
         renderProjects();
         renderTimeline();
+        populateStats();
         if (isEditMode) injectProjectAddBtn();
 
         setProjectAddStatus(`"${infoData.name || repo}" added!`, 'success');
@@ -1162,6 +1194,7 @@ async function handleProjectDelete() {
         closeProjectDeleteModal();
         renderProjects();
         renderTimeline();
+        populateStats();
 
     } catch (err) {
         console.error('Project delete error:', err);
@@ -2050,7 +2083,7 @@ if (levelsOverlay) {
 
 // ── RENDER CERTIFICATES ───────────────────────────────────────
 
-function renderCertCard(data) {
+function renderCertCard(data, companyLabel = null) {
     const card = document.createElement('div');
     card.className = 'cert-card';
     if (data.id) card.dataset.certId = data.id;
@@ -2059,18 +2092,36 @@ function renderCertCard(data) {
         ? `https://raw.githubusercontent.com/devssst/my-portfolio/main/${data.file.split('/').map(encodeURIComponent).join('/')}`
         : null;
 
+    // Date stored as MM-DD-YYYY
     let dateStr = '';
     if (data.date) {
-        const d = new Date(data.date + '-01');
-        dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+        const parts = data.date.split('-');
+        if (parts.length === 3) {
+            const d = new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1]));
+            dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+        } else if (parts.length === 2) {
+            const d = new Date(data.date + '-01');
+            dateStr = d.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
+        }
     }
 
     const previewHTML = rawUrl
         ? `<img src="${rawUrl}" alt="${data.title}" loading="lazy">`
         : `<i class="fa-solid fa-certificate cert-card-placeholder-icon"></i>`;
 
+    // Solo cards get company name overlaid on the banner bottom-left
+    const companyOverlayHTML = companyLabel
+        ? `<div class="cert-card-company-overlay">${companyLabel.toUpperCase()}</div>`
+        : '';
+
     card.innerHTML = `
-        <div class="cert-card-preview">${previewHTML}</div>
+        <button class="cert-card-delete" title="Delete certificate" aria-label="Delete certificate">
+            <i class="fa-solid fa-xmark"></i>
+        </button>
+        <div class="cert-card-preview">
+            ${previewHTML}
+            ${companyOverlayHTML}
+        </div>
         <div class="cert-card-body">
             <div class="cert-card-title">${data.title}</div>
             ${data.details ? `<div class="cert-card-details">${data.details}</div>` : ''}
@@ -2088,7 +2139,16 @@ function renderCertCard(data) {
         });
     }
 
-    card.addEventListener('click', () => {
+    const deleteBtn = card.querySelector('.cert-card-delete');
+    if (deleteBtn) {
+        deleteBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            openCertDeleteModal(data);
+        });
+    }
+
+    card.addEventListener('click', (e) => {
+        if (e.target.closest('.cert-card-delete')) return;
         const overlay    = document.getElementById('certOverlay');
         const overlayImg = document.getElementById('certOverlayImg');
         if (!overlay || !overlayImg || !rawUrl) return;
@@ -2122,9 +2182,39 @@ function renderCerts() {
     });
     companies.sort((a, b) => a === 'Unknown' ? 1 : b === 'Unknown' ? -1 : a.localeCompare(b));
 
-    // Render grouped by company — labels only, no filter buttons
+    // Split into solo (1 cert) and multi (2+ certs)
+    const soloCompanies = companies.filter(c =>
+        FETCHED_CERTS.filter(cert => ((cert.company || '').trim() || 'Unknown') === c).length === 1
+    );
+    const multiCompanies = companies.filter(c =>
+        FETCHED_CERTS.filter(cert => ((cert.company || '').trim() || 'Unknown') === c).length > 1
+    );
+
     root.innerHTML = '';
-    companies.forEach(company => {
+
+    // ── SOLO SECTION ──
+    // All solo-company certs share one unlabeled row (up to 4 per row via grid).
+    // Company name is shown as an overlay on the banner bottom-left of each card.
+    if (soloCompanies.length > 0) {
+        const soloSection = document.createElement('div');
+        soloSection.className = 'certs-solo-section';
+
+        const grid = document.createElement('div');
+        grid.className = 'certs-grid';
+
+        soloCompanies.forEach(company => {
+            const cert = FETCHED_CERTS.find(c => ((c.company || '').trim() || 'Unknown') === company);
+            if (cert) grid.appendChild(renderCertCard(cert, company));
+        });
+
+        soloSection.appendChild(grid);
+        root.appendChild(soloSection);
+    }
+
+    // ── MULTI SECTION ──
+    // Each multi-cert company gets its own labeled group.
+    // Company name shown as a label above the grid.
+    multiCompanies.forEach(company => {
         const group = FETCHED_CERTS.filter(c =>
             ((c.company || '').trim() || 'Unknown') === company
         );
@@ -2136,7 +2226,8 @@ function renderCerts() {
 
         const grid = document.createElement('div');
         grid.className = 'certs-grid';
-        group.forEach(cert => grid.appendChild(renderCertCard(cert)));
+        // Multi cards don't need the overlay — company is shown in the heading label above
+        group.forEach(cert => grid.appendChild(renderCertCard(cert, null)));
         groupEl.appendChild(grid);
         root.appendChild(groupEl);
     });
@@ -2155,6 +2246,262 @@ if (certOverlay) {
     certOverlay.addEventListener('click', (e) => {
         if (e.target === certOverlay) certOverlay.classList.remove('open');
     });
+}
+
+// ── CERT UPLOAD MODAL ─────────────────────────────────────────
+
+let selectedCertFile = null;
+
+const certUploadOverlay  = document.getElementById('certUploadOverlay');
+const certUploadClose    = document.getElementById('certUploadClose');
+const certDropZone       = document.getElementById('certDropZone');
+const certFileInput      = document.getElementById('certFileInput');
+const certDropBrowse     = document.getElementById('certDropBrowse');
+const certDropFileName   = document.getElementById('certDropFileName');
+const certTitleInput     = document.getElementById('certTitleInput');
+const certDetailsInput   = document.getElementById('certDetailsInput');
+const certCompanyInput   = document.getElementById('certCompanyInput');
+const certDateInput      = document.getElementById('certDateInput');
+const certUploadSubmit   = document.getElementById('certUploadSubmit');
+const certUploadStatus   = document.getElementById('certUploadStatus');
+
+function openCertUploadModal() {
+    resetCertUploadModal();
+    if (certUploadOverlay) certUploadOverlay.classList.add('open');
+}
+
+function closeCertUploadModal() {
+    if (certUploadOverlay) certUploadOverlay.classList.remove('open');
+}
+
+function resetCertUploadModal() {
+    selectedCertFile = null;
+    if (certDropZone)     certDropZone.classList.remove('drag-over', 'has-file');
+    if (certDropFileName) { certDropFileName.textContent = 'No file selected'; certDropFileName.classList.remove('has-file'); }
+    if (certTitleInput)   certTitleInput.value   = '';
+    if (certDetailsInput) certDetailsInput.value = '';
+    if (certCompanyInput) certCompanyInput.value = '';
+    if (certDateInput)    certDateInput.value    = '';
+    if (certFileInput)    certFileInput.value    = '';
+    if (certUploadStatus) { certUploadStatus.textContent = ''; certUploadStatus.className = 'doc-upload-status'; }
+    if (certUploadSubmit) { certUploadSubmit.disabled = false; certUploadSubmit.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Upload'; }
+}
+
+function setCertUploadStatus(msg, type) {
+    if (!certUploadStatus) return;
+    certUploadStatus.textContent = msg;
+    certUploadStatus.className   = 'doc-upload-status' + (type ? ` ${type}` : '');
+}
+
+function handleCertFileSelected(file) {
+    if (!file) return;
+    const allowed = ['image/png', 'image/jpeg', 'image/webp', 'image/jpg'];
+    if (!allowed.includes(file.type)) {
+        setCertUploadStatus('Only PNG, JPG, or WEBP images are accepted.', 'error');
+        return;
+    }
+    selectedCertFile = file;
+    if (certDropZone)     certDropZone.classList.add('has-file');
+    if (certDropFileName) { certDropFileName.textContent = file.name; certDropFileName.classList.add('has-file'); }
+    if (certTitleInput && !certTitleInput.value) {
+        certTitleInput.value = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+    }
+    setCertUploadStatus('', '');
+}
+
+if (certUploadClose) certUploadClose.addEventListener('click', closeCertUploadModal);
+if (certUploadOverlay) {
+    certUploadOverlay.addEventListener('click', (e) => {
+        if (e.target === certUploadOverlay) closeCertUploadModal();
+    });
+}
+
+if (certDropBrowse) {
+    certDropBrowse.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (certFileInput) certFileInput.click();
+    });
+}
+
+if (certDropZone) {
+    certDropZone.addEventListener('click', (e) => {
+        if (e.target === certDropBrowse || e.target.closest('.doc-drop-browse')) return;
+        if (certFileInput) certFileInput.click();
+    });
+    certDropZone.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        certDropZone.classList.add('drag-over');
+    });
+    certDropZone.addEventListener('dragleave', (e) => {
+        if (!certDropZone.contains(e.relatedTarget)) certDropZone.classList.remove('drag-over');
+    });
+    certDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        certDropZone.classList.remove('drag-over');
+        const file = e.dataTransfer?.files?.[0] || null;
+        if (file) handleCertFileSelected(file);
+    });
+}
+
+if (certFileInput) {
+    certFileInput.addEventListener('change', () => {
+        if (certFileInput.files?.[0]) handleCertFileSelected(certFileInput.files[0]);
+    });
+}
+
+if (certUploadSubmit) certUploadSubmit.addEventListener('click', handleCertUpload);
+
+async function handleCertUpload() {
+    if (!selectedCertFile) {
+        setCertUploadStatus('Please select an image file first.', 'error');
+        return;
+    }
+    const title   = certTitleInput?.value.trim()   || '';
+    const details = certDetailsInput?.value.trim() || '';
+    const company = certCompanyInput?.value.trim() || '';
+    const dateRaw = certDateInput?.value || ''; // YYYY-MM-DD from type="date"
+
+    // Convert YYYY-MM-DD → MM-DD-YYYY for storage
+    let date = '';
+    if (dateRaw) {
+        const [yyyy, mm, dd] = dateRaw.split('-');
+        if (yyyy && mm && dd) date = `${mm}-${dd}-${yyyy}`;
+    }
+
+    if (!title) {
+        setCertUploadStatus('Please enter a title.', 'error');
+        if (certTitleInput) certTitleInput.focus();
+        return;
+    }
+    if (!GH_TOKEN || !GH_OWNER || !GH_REPO) {
+        setCertUploadStatus('GitHub credentials not loaded. Try again.', 'error');
+        return;
+    }
+
+    certUploadSubmit.disabled = true;
+    certUploadSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Uploading...';
+    setCertUploadStatus('', '');
+
+    try {
+        const id       = `cert-${Date.now()}`;
+        const fileName = selectedCertFile.name;          // preserve original filename
+        const filePath = `data/files/${fileName}`;
+
+        const base64 = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload  = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(selectedCertFile);
+        });
+
+        setCertUploadStatus('Pushing to GitHub...', '');
+        await ghPushFile(filePath, base64, `Add certificate: ${fileName}`);
+
+        setCertUploadStatus('Saving to Firestore...', '');
+
+        const snap  = await getDoc(doc(_dDb, "portfolio", "certs"));
+        const raw   = snap.exists() ? snap.data().data : null;
+        let certs   = Array.isArray(raw) ? raw : (raw?.certificates || []);
+
+        const entry = { id, title, details, company, date, file: filePath };
+        certs.push(entry);
+
+        await setDoc(doc(_dDb, "portfolio", "certs"), { data: certs });
+
+        FETCHED_CERTS = certs;
+        renderCerts();
+        renderTimeline();
+        populateStats();
+        if (isEditMode) {
+            injectCertAddBtn();
+            document.getElementById('certsRoot')?.classList.add('edit-active');
+        }
+
+        setCertUploadStatus('Certificate uploaded!', 'success');
+        setTimeout(() => closeCertUploadModal(), 1200);
+
+    } catch (err) {
+        console.error('Cert upload error:', err);
+        setCertUploadStatus(`Upload failed: ${err.message || 'Unknown error'}`, 'error');
+        certUploadSubmit.disabled = false;
+        certUploadSubmit.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> Upload';
+    }
+}
+
+// ── CERT DELETE MODAL ─────────────────────────────────────────
+
+let pendingDeleteCert = null;
+
+const certDeleteOverlay = document.getElementById('certDeleteOverlay');
+const certDeleteClose   = document.getElementById('certDeleteClose');
+const certDeleteCancel  = document.getElementById('certDeleteCancel');
+const certDeleteConfirm = document.getElementById('certDeleteConfirm');
+const certDeleteTitle   = document.getElementById('certDeleteTitle');
+
+function openCertDeleteModal(data) {
+    pendingDeleteCert = data;
+    if (certDeleteTitle) certDeleteTitle.textContent = data.title || 'this certificate';
+    if (certDeleteConfirm) {
+        certDeleteConfirm.disabled = false;
+        certDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
+    }
+    if (certDeleteOverlay) certDeleteOverlay.classList.add('open');
+}
+
+function closeCertDeleteModal() {
+    if (certDeleteOverlay) certDeleteOverlay.classList.remove('open');
+    pendingDeleteCert = null;
+}
+
+if (certDeleteClose)  certDeleteClose?.addEventListener('click',  closeCertDeleteModal);
+if (certDeleteCancel) certDeleteCancel?.addEventListener('click', closeCertDeleteModal);
+if (certDeleteOverlay) {
+    certDeleteOverlay.addEventListener('click', (e) => {
+        if (e.target === certDeleteOverlay) closeCertDeleteModal();
+    });
+}
+if (certDeleteConfirm) certDeleteConfirm.addEventListener('click', handleCertDelete);
+
+async function handleCertDelete() {
+    if (!pendingDeleteCert) return;
+    const { id, file } = pendingDeleteCert;
+
+    certDeleteConfirm.disabled = true;
+    certDeleteConfirm.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
+
+    try {
+        // Remove file from GitHub (non-fatal)
+        if (file) {
+            try {
+                await ghDeleteFile(file, `Remove certificate: ${file}`);
+            } catch (ghErr) {
+                console.warn('GitHub cert delete skipped:', ghErr.message);
+            }
+        }
+
+        const snap  = await getDoc(doc(_dDb, "portfolio", "certs"));
+        const raw   = snap.exists() ? snap.data().data : null;
+        let certs   = Array.isArray(raw) ? raw : (raw?.certificates || []);
+        certs       = certs.filter(c => c.id !== id);
+
+        await setDoc(doc(_dDb, "portfolio", "certs"), { data: certs });
+
+        FETCHED_CERTS = certs;
+        closeCertDeleteModal();
+        renderCerts();
+        renderTimeline();
+        populateStats();
+        if (isEditMode) {
+            injectCertAddBtn();
+            document.getElementById('certsRoot')?.classList.add('edit-active');
+        }
+
+    } catch (err) {
+        console.error('Cert delete error:', err);
+        certDeleteConfirm.disabled = false;
+        certDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
+        alert(`Delete failed: ${err.message || 'Unknown error'}`);
+    }
 }
 
 // ── ABOUT EDIT BTN VISIBILITY ─────────────────────────────────

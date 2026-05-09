@@ -1273,10 +1273,107 @@ body::before {
 }
 
 .certs-grid {
-    display: flex;
-    flex-wrap: wrap;
+    display: grid;
+    grid-template-columns: repeat(4, 220px);
     gap: 14px;
     align-items: flex-start;
+}
+
+/* Solo-company section — no heading label, cards flow 4-per-row */
+.certs-solo-section {
+    margin-bottom: 32px;
+}
+
+/* Company name overlaid on the banner bottom-left of solo cards */
+.cert-card-company-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 18px 10px 7px;
+    background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 100%);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 0.14em;
+    color: rgba(168, 85, 247, 0.95);
+    pointer-events: none;
+    border-radius: 0 0 4px 4px;
+}
+
+/* ── CERT ADD BUTTON ─────────────────────────────────────────── */
+
+.cert-add-btn {
+    position: absolute;
+    right: 0;
+    bottom: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 16px;
+    border: 1px dashed rgba(34, 197, 94, 0.4);
+    border-radius: 10px;
+    background: rgba(34, 197, 94, 0.05);
+    color: rgba(34, 197, 94, 0.7);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.cert-add-btn:hover {
+    background: rgba(168, 85, 247, 0.08);
+    border-color: rgba(168, 85, 247, 0.5);
+    color: rgba(168, 85, 247, 0.9);
+}
+
+/* ── CERT CARD DELETE BUTTON ─────────────────────────────────── */
+
+.cert-card-delete {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(239, 68, 68, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-size: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.15s ease, background 0.15s ease;
+    z-index: 10;
+}
+
+#certsRoot.edit-active .cert-card .cert-card-delete {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.cert-card-delete:hover {
+    background: rgba(239, 68, 68, 1);
+    transform: scale(1.12);
+}
+
+/* ── CERT UPLOAD MODAL ───────────────────────────────────────── */
+
+.cert-upload-overlay .faq-card {
+    max-width: 520px;
+    overflow-y: auto;
+    max-height: 90vh;
+}
+
+/* ── CERT DELETE CONFIRM MODAL ───────────────────────────────── */
+
+.cert-delete-overlay .faq-card {
+    max-width: 380px;
+    text-align: center;
 }
 
 .project-card.highlight, .cert-card.highlight, .about-edu-card.highlight {
@@ -1807,6 +1904,7 @@ body::before {
     justify-content: center;
     overflow: hidden;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    position: relative;
 }
 
 .cert-card-preview img {

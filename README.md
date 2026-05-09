@@ -1,5 +1,5 @@
 # 🧑‍💻 Developer VIEN — Portfolio
-### 🔰 Phase 3 — Complete | Phase 4 — In Progress (Documents ✓ · WHO AM I? ✓ · Milestones ✓ · Projects ✓)
+### 🔰 Phase 3 — Complete | Phase 4 — Complete ✓ | Phase 5 — Planned
 ![Portfolio Background](assets/images/banner.png)
 
 A personal developer portfolio for **Vien Fritzgerald V. Calderon**, built entirely with vanilla HTML, CSS, and JavaScript — no frameworks, no backend. Features a dark aesthetic, dual-mode welcome page (Visitor & Developer), and a fully data-driven dashboard powered by Firebase Firestore and GitHub-hosted project metadata.
@@ -28,7 +28,7 @@ All content (projects, certificates, CV/resume documents, timeline events) is dr
 - **Languages & Tools**: Animated horizontal skill bars with language logo icons and brand colors; level labels per bar; legend card with 6 proficiency levels — click legend to open the full levels modal
 - **TIMESTAMPS**: Auto-generated from Firestore `portfolio/timestamp` — repo slugs (with date), education sync entries, and milestone entries (`type: 'milestone'`); all sources merged and grouped by year descending, then sorted by month descending within each year; date shown on click (accordion toggle); "Learn More" on project/cert/education entries cross-links to the matching card; milestones show a delete X button in edit mode
 - **Projects**: Year-grouped card grid auto-fetched via `timestamp` → `INFO.json` per repo; year derived from the `date` field stored in the Firestore `timestamp` entry (not from INFO.json); universal card spec with banner preview, accordion expand showing contribution text + Live and Source buttons; add/delete in edit mode
-- **Certificates**: Gallery layout (220px cards, PNG previews, title, details, date); clicking a card opens a full-screen image overlay — data from Firestore `portfolio/certs`
+- **Certificates**: Gallery layout (220px cards, PNG previews, title, details, date); companies with one certificate share a top row with the company name overlaid on the banner bottom-left; companies with two or more certificates each get their own labeled group below; clicking a card opens a full-screen image overlay; add/delete in edit mode — data from Firestore `portfolio/certs`
 - **SEND ME YOUR DM**: Contact form (name, email, subject, message) with full validation, animated error states, EmailJS integration with success/spinner states
 
 ---
@@ -147,7 +147,25 @@ Example for `about`:
 > **education** is an array — multiple degrees can be stacked. Dates stored as `MM-DD-YYYY`. If `schoolEnd` is in the future, the card shows `— present`; if past, shows `Graduated: YYYY`. Old single-map format is auto-migrated to array on first save.
 
 
-Example for `docs`:
+Example for `certs`:
+```json
+{
+    "data": [
+        {
+            "id": "cert-1778321059676",
+            "title": "Certificate Title",
+            "details": "Issued by Company Name",
+            "company": "Company Name",
+            "date": "05-09-2026",
+            "file": "data/files/certificate.png"
+        }
+    ]
+}
+```
+> `date` stored as `MM-DD-YYYY`; rendered on the card as `Month DD, YYYY` (e.g. `May 9, 2026`). `file` is the path within the repo; the dashboard builds the full `raw.githubusercontent.com` URL at render time.
+> Both old `{ data: { certificates: [] } }` format and new flat `{ data: [] }` format are read correctly.
+
+
 ```json
 {
     "data": {
@@ -228,8 +246,20 @@ Access the live site: https://devssst.github.io/my-portfolio
 2. Red X buttons appear on each milestone entry
 3. Click the X and confirm — the entry is removed from `portfolio/timestamp` and the timeline updates in place
 
-### Adding a certificate
-Certificates upload/delete via edit mode is planned for Phase 4. For now, add the PNG to `data/files/` manually and add an entry to `portfolio/certs` in Firestore under `data.certificates`.
+### Adding a certificate — Edit Mode
+1. Log in and activate edit mode from the badge dropdown
+2. Navigate to the **CERTIFICATES** section — an **+ Add Certificate** button appears in the heading
+3. Drag and drop or browse for a PNG, JPG, or WEBP image
+4. Fill in the title, details (e.g. course name), company, and date — date uses the native date picker and is stored as `MM-DD-YYYY`
+5. Click Upload — the image is pushed to `data/files/` on GitHub (using the original filename) and the metadata is saved to `portfolio/certs`; the card renders immediately and the timeline updates in place
+
+### Deleting a certificate — Edit Mode
+1. Activate edit mode and navigate to **CERTIFICATES**
+2. Red X buttons appear on each certificate card
+3. Click the X and confirm — the image is removed from GitHub (non-fatal if already missing) and the entry is removed from `portfolio/certs`; the card and timeline entry are removed immediately
+
+### Adding a certificate (manual fallback)
+Certificates can also be added manually by uploading the image to `data/files/` and adding an entry to `portfolio/certs` in Firestore under the `data` array directly.
 
 > **Existing repos**: if you added repos to `portfolio/timestamp` before the project add modal existed (bare `{ "repo": "..." }` entries with no `date` field), go into Firestore and manually add a `date: "YYYY-MM"` field to each entry — otherwise they will render without a date and sort to the current year.
 
@@ -288,16 +318,17 @@ Certificates upload/delete via edit mode is planned for Phase 4. For now, add th
 - [x] **SEND ME YOUR DM** — full validation; EmailJS wired
 - [x] **Firestore migration** — all JSON data moved to Firestore `portfolio` collection; `data/` folder reduced to physical files only
 
-### Phase 4 — Edit Mode *(In Progress)*
+### Phase 4 — Edit Mode *(Complete)*
 - [x] Edit mode toggle in badge dropdown — global `isEditMode` state; exits with 2s delayed reload
 - [x] **Home — Documents**: ADD button injected into card grid; drag-and-drop upload modal (title + type fields); file pushed to GitHub via Contents API; metadata saved to Firestore; card re-renders in place without reload
 - [x] **Home — Documents**: per-card delete button (red X, edit mode only); confirm modal; file removed from GitHub + entry removed from Firestore
 - [x] **WHO AM I? — About**: edit modal with Bio, stackable Education entries (add/remove per entry), Proficiency language picker; saves to Firestore `portfolio/about`; education changes sync to `portfolio/timestamp`; all sections show proper empty states
 - [x] **TIMESTAMPS — Milestones**: Add Milestone button in heading (edit mode); modal with title, description, date fields; entry saved to `portfolio/timestamp` with `type: 'milestone'`; timeline re-renders in place
 - [x] **TIMESTAMPS — Milestones**: per-entry delete X (edit mode only); confirm modal; entry removed from `portfolio/timestamp`; timeline re-renders in place
-- [x] **Projects**: Add Project button in heading (edit mode); modal with repo slug + month/year date input; verifies INFO.json exists before saving; `{ repo, date }` written to `portfolio/timestamp`; in-place re-render
-- [x] **Projects**: per-card delete X (edit mode only); confirm modal; repo entry removed from `portfolio/timestamp`; card removed immediately
-- [ ] **Certificates**: upload PNG + config form (title, company, details, date) → GitHub + Firestore; per-card delete
+- [x] **Projects**: Add Project button in heading (edit mode); modal with repo slug + month/year date input; verifies INFO.json exists before saving; `{ repo, date }` written to `portfolio/timestamp`; in-place re-render; stats update immediately
+- [x] **Projects**: per-card delete X (edit mode only); confirm modal; repo entry removed from `portfolio/timestamp`; card removed immediately; stats update immediately
+- [x] **Certificates**: Add Certificate button in heading (edit mode); drag-and-drop modal (PNG/JPG/WEBP); fields for title, details, company, date (native date picker → stored `MM-DD-YYYY`); image pushed to GitHub using original filename; metadata saved to `portfolio/certs` flat array; cards, timeline, and stats update immediately
+- [x] **Certificates**: per-card delete X (edit mode only); confirm modal; image removed from GitHub (non-fatal); entry removed from `portfolio/certs`; cards, timeline, and stats update immediately
 
 ### Phase 5 — Polish & Deploy
 - [ ] Mobile responsiveness — 375px breakpoints
@@ -307,6 +338,17 @@ Certificates upload/delete via edit mode is planned for Phase 4. For now, add th
 ---
 
 ## 📋 Update Logs
+
+### Phase 4 — Certificates Edit Mode + Final Fixes (May 9 2026)
+- **Certificates add complete**: "+ Add Certificate" button injected into CERTIFICATES heading in edit mode; drag-and-drop modal accepts PNG, JPG, WEBP; fields for title, details, company, and date (native date picker, stored as `MM-DD-YYYY`); image pushed to GitHub under original filename (not id); metadata written to `portfolio/certs` flat array; cards, timeline entry, and stats update immediately in place
+- **Certificates delete complete**: red X button on each cert card (edit mode only); confirm modal; image removed from GitHub (non-fatal if missing); entry removed from `portfolio/certs`; cards, timeline, and stats update immediately
+- **Certificate layout**: solo-company certs (one per company) share a top row; company name overlaid on the banner bottom-left via gradient scrim; multi-company certs (two or more) each get a labeled group row below; 4-card CSS grid, `position: relative` added to `.cert-card-preview` to anchor the overlay correctly
+- **Certificate date display**: date shown on card as `Month DD, YYYY` (full day included); timeline shows `Month YYYY` (month-level granularity sufficient)
+- **Certificate date picker**: input changed from plain text (`MM-DD-YYYY` placeholder) to `type="date"` native picker; value converted from `YYYY-MM-DD` → `MM-DD-YYYY` on save
+- **Certificate timeline date fix**: `renderTimeline` cert block now correctly parses `MM-DD-YYYY` format (reads `parts[0]` as month, `parts[2]` as year) — previously treated all dates as `YYYY-MM` causing `Invalid Date`
+- **Firestore format compatibility**: `loadAllData`, `handleCertUpload`, `handleCertDelete` all handle both old `{ data: { certificates: [] } }` and new flat `{ data: [] }` format transparently
+- **Stats instant update**: `populateStats()` now called after every project add, project delete, cert upload, and cert delete — counts update without page reload
+- **Timeline instant update**: `renderTimeline()` now called after cert upload and cert delete — timeline entry appears/disappears immediately
 
 ### Phase 4 — Projects Edit Mode + Date Architecture Overhaul (May 9 2026)
 - **Projects add complete**: "+ New Project" button injected into PROJECTS heading in edit mode; modal with repo slug input and `type="month"` date picker; validates `INFO.json` exists and is accessible before saving; guards against duplicate repos; writes `{ repo, date }` to `portfolio/timestamp`; re-renders projects and timeline in place
