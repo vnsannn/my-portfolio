@@ -1,5 +1,5 @@
 # 🧑‍💻 Developer VIEN — Portfolio
-### 🔰 Phase 3 — Complete | Phase 4 — In Progress (Documents ✓ · WHO AM I? ✓ · Milestones ✓)
+### 🔰 Phase 3 — Complete | Phase 4 — In Progress (Documents ✓ · WHO AM I? ✓ · Milestones ✓ · Projects ✓)
 ![Portfolio Background](assets/images/banner.png)
 
 A personal developer portfolio for **Vien Fritzgerald V. Calderon**, built entirely with vanilla HTML, CSS, and JavaScript — no frameworks, no backend. Features a dark aesthetic, dual-mode welcome page (Visitor & Developer), and a fully data-driven dashboard powered by Firebase Firestore and GitHub-hosted project metadata.
@@ -26,8 +26,8 @@ All content (projects, certificates, CV/resume documents, timeline events) is dr
 - **Home**: Hero section with profile photo, name, and social icon links; CV/Resume doc cards with PDF.js thumbnails — data loaded from Firestore `portfolio/docs`; VIEW opens the GitHub PDF viewer, SAVE triggers a direct download
 - **WHO AM I?**: Live age counter (updates every minute from DOB Dec 15 2006), stackable education cards (array — multiple degrees supported), bio paragraph, stat cards (Projects, Certificates, Yrs Experience, Languages) — counts auto-derived from Firestore data; stat cards navigate to their section on click; consistent empty states for bio, education, and languages
 - **Languages & Tools**: Animated horizontal skill bars with language logo icons and brand colors; level labels per bar; legend card with 6 proficiency levels — click legend to open the full levels modal
-- **TIMESTAMPS**: Auto-generated from Firestore `portfolio/timestamp` (repo slugs + education entries) and `portfolio/milestones` (manual milestone entries); all sources merged and grouped by year descending, then sorted by month descending within each year; date shown on click (accordion toggle); "Learn More" on project/cert/education entries cross-links to the matching card; milestones show a delete X button in edit mode
-- **Projects**: Year-grouped card grid auto-fetched via `timestamp` → `INFO.json` per repo; universal card spec with banner preview, accordion expand showing contribution text + Live and Source buttons
+- **TIMESTAMPS**: Auto-generated from Firestore `portfolio/timestamp` — repo slugs (with date), education sync entries, and milestone entries (`type: 'milestone'`); all sources merged and grouped by year descending, then sorted by month descending within each year; date shown on click (accordion toggle); "Learn More" on project/cert/education entries cross-links to the matching card; milestones show a delete X button in edit mode
+- **Projects**: Year-grouped card grid auto-fetched via `timestamp` → `INFO.json` per repo; year derived from the `date` field stored in the Firestore `timestamp` entry (not from INFO.json); universal card spec with banner preview, accordion expand showing contribution text + Live and Source buttons; add/delete in edit mode
 - **Certificates**: Gallery layout (220px cards, PNG previews, title, details, date); clicking a card opens a full-screen image overlay — data from Firestore `portfolio/certs`
 - **SEND ME YOUR DM**: Contact form (name, email, subject, message) with full validation, animated error states, EmailJS integration with success/spinner states
 
@@ -108,34 +108,22 @@ portfolio/
 ├── certs           # Certificate metadata array
 ├── docs            # CV/Resume metadata arrays (cv + resume)
 ├── lang            # Language metadata array (name, color, icon)
-├── timestamp       # Timeline registry — repo slugs and education entries
-└── milestones      # Manual milestone entries (title, desc, date)
+└── timestamp       # Timeline registry — repo slugs (with date), education sync entries, milestones
 ```
 
 Each document stores its data under a `data` field. Example for `timestamp`:
 ```json
 {
     "data": [
-        { "repo": "devssst/my-portfolio" },
-        { "type": "education", "title": "BSIT - DPLmB", "date": "2024-08", "desc": "Dalubhasaang Politekniko ng Lungsod ng Baliwag" }
+        { "repo": "devssst/my-portfolio", "date": "2026-05" },
+        { "repo": "devssst/btech-slims", "date": "2025-06" },
+        { "type": "education", "title": "BSIT - DPLmB", "date": "2024-08", "desc": "Dalubhasaang Politekniko ng Lungsod ng Baliwag" },
+        { "id": "milestone-1746432000000", "type": "milestone", "title": "Started freelancing", "desc": "First paid project.", "date": "05-01-2026" }
     ]
 }
 ```
-
-Example for `milestones`:
-```json
-{
-    "data": [
-        {
-            "id": "milestone-1746432000000",
-            "title": "Started freelancing",
-            "desc": "First paid project.",
-            "date": "05-01-2026"
-        }
-    ]
-}
-```
-> `date` in `milestones` is stored as `MM-DD-YYYY`. Timeline renders it as `Month YYYY`.
+> Repo entries require a `date` field (`YYYY-MM`) — this is entered by the admin through the project add modal and is the single source of truth for project year/month grouping. The `date` field in INFO.json is ignored.
+> Milestone `date` is stored as `MM-DD-YYYY`; rendered in the timeline as `Month YYYY`.
 
 Example for `about`:
 ```json
@@ -182,8 +170,6 @@ Example for `docs`:
 {
     "id": "unique-id",
     "name": "Project Name",
-    "year": 2026,
-    "date": "YYYY-MM",
     "description": "One sentence shown on the card.",
     "about": "Full paragraph shown on expand.",
     "contributions": "Your role and what you built.",
@@ -193,6 +179,7 @@ Example for `docs`:
     "source": "https://github.com/nickname/your-project-repo"
 }
 ```
+> `year` and `date` fields are no longer read from INFO.json. Date is entered by the admin in the project add modal and stored in `portfolio/timestamp`. Remove both fields from existing INFO.json files to avoid confusion.
 > **banner** must be a full `raw.githubusercontent.com` URL. Relative paths will 404. Omit the field to show the `fa-code` placeholder icon.
 
 ---
@@ -206,10 +193,16 @@ Example for `docs`:
 ### Running
 Access the live site: https://devssst.github.io/my-portfolio
 
-### Adding a new project
-1. Place an `INFO.json` at the root of the project repo
-2. Add a repo entry to `portfolio/timestamp` in Firestore: `{ "repo": "devssst/your-repo" }`
-3. Push `INFO.json` — the portfolio auto-fetches and renders the card
+### Adding a new project — Edit Mode
+1. Log in and activate edit mode from the badge dropdown
+2. Navigate to the **PROJECTS** section — a **+ New Project** button appears in the heading
+3. Enter the repo slug (`nickname/project-repo`) and select the project month/year
+4. Click Add Project — the site fetches `INFO.json` to verify the repo is public, then saves `{ repo, date }` to `portfolio/timestamp`; the card renders immediately
+
+### Deleting a project — Edit Mode
+1. Activate edit mode and navigate to **PROJECTS**
+2. Red X buttons appear on each project card
+3. Click the X and confirm — the repo entry is removed from `portfolio/timestamp` and the card is removed from the grid immediately
 
 ### Uploading a document (CV / Resume) — Edit Mode
 1. Log in and activate edit mode from the badge dropdown
@@ -228,15 +221,17 @@ Access the live site: https://devssst.github.io/my-portfolio
 1. Log in and activate edit mode from the badge dropdown
 2. Navigate to the **TIMESTAMPS** section — an **+ Add Milestone** button appears in the heading
 3. Click it and fill in the title, an optional description, and a date
-4. Click Save Milestone — the entry is written to Firestore `portfolio/milestones` and the timeline re-renders immediately
+4. Click Save Milestone — the entry (`type: 'milestone'`) is written to `portfolio/timestamp` and the timeline re-renders immediately
 
 ### Deleting a milestone — Edit Mode
 1. Activate edit mode and navigate to **TIMESTAMPS**
 2. Red X buttons appear on each milestone entry
-3. Click the X and confirm — the entry is removed from Firestore and the timeline updates in place
+3. Click the X and confirm — the entry is removed from `portfolio/timestamp` and the timeline updates in place
 
 ### Adding a certificate
 Certificates upload/delete via edit mode is planned for Phase 4. For now, add the PNG to `data/files/` manually and add an entry to `portfolio/certs` in Firestore under `data.certificates`.
+
+> **Existing repos**: if you added repos to `portfolio/timestamp` before the project add modal existed (bare `{ "repo": "..." }` entries with no `date` field), go into Firestore and manually add a `date: "YYYY-MM"` field to each entry — otherwise they will render without a date and sort to the current year.
 
 ---
 
@@ -298,10 +293,10 @@ Certificates upload/delete via edit mode is planned for Phase 4. For now, add th
 - [x] **Home — Documents**: ADD button injected into card grid; drag-and-drop upload modal (title + type fields); file pushed to GitHub via Contents API; metadata saved to Firestore; card re-renders in place without reload
 - [x] **Home — Documents**: per-card delete button (red X, edit mode only); confirm modal; file removed from GitHub + entry removed from Firestore
 - [x] **WHO AM I? — About**: edit modal with Bio, stackable Education entries (add/remove per entry), Proficiency language picker; saves to Firestore `portfolio/about`; education changes sync to `portfolio/timestamp`; all sections show proper empty states
-- [x] **TIMESTAMPS — Milestones**: Add Milestone button appears in heading in edit mode; modal with title, description, date fields; saves to Firestore `portfolio/milestones`; timeline re-renders in place
-- [x] **TIMESTAMPS — Milestones**: per-entry delete button (red X, edit mode only); confirm modal; entry removed from Firestore `portfolio/milestones`; timeline re-renders in place
-- [ ] **TIMESTAMPS**: add repo URL entries via modal → Firestore `portfolio/timestamp`
-- [ ] **Projects**: remove entry from timestamp → Firestore
+- [x] **TIMESTAMPS — Milestones**: Add Milestone button in heading (edit mode); modal with title, description, date fields; entry saved to `portfolio/timestamp` with `type: 'milestone'`; timeline re-renders in place
+- [x] **TIMESTAMPS — Milestones**: per-entry delete X (edit mode only); confirm modal; entry removed from `portfolio/timestamp`; timeline re-renders in place
+- [x] **Projects**: Add Project button in heading (edit mode); modal with repo slug + month/year date input; verifies INFO.json exists before saving; `{ repo, date }` written to `portfolio/timestamp`; in-place re-render
+- [x] **Projects**: per-card delete X (edit mode only); confirm modal; repo entry removed from `portfolio/timestamp`; card removed immediately
 - [ ] **Certificates**: upload PNG + config form (title, company, details, date) → GitHub + Firestore; per-card delete
 
 ### Phase 5 — Polish & Deploy
@@ -313,16 +308,24 @@ Certificates upload/delete via edit mode is planned for Phase 4. For now, add th
 
 ## 📋 Update Logs
 
+### Phase 4 — Projects Edit Mode + Date Architecture Overhaul (May 9 2026)
+- **Projects add complete**: "+ New Project" button injected into PROJECTS heading in edit mode; modal with repo slug input and `type="month"` date picker; validates `INFO.json` exists and is accessible before saving; guards against duplicate repos; writes `{ repo, date }` to `portfolio/timestamp`; re-renders projects and timeline in place
+- **Projects delete complete**: red X button on each project card (visible in edit mode only); confirm modal; removes repo entry from `portfolio/timestamp` by slug; filters `FETCHED_PROJECTS` in memory; re-renders both projects and timeline immediately
+- **Date ownership moved to Firestore**: project dates are no longer read from `INFO.json` — `date` field is entered by the admin in the add modal and stored in the `portfolio/timestamp` entry as `YYYY-MM`; `loadAllData()` now attaches `e.date` from the Firestore entry onto each project object, overriding anything in INFO.json
+- **`year` field removed from project sorting**: `renderProjects()` previously used `info.year` (from INFO.json) for year-group bucketing; now derives year from `info.date.split('-')[0]` — same source as timeline month sort; `year` and `date` fields should be removed from existing INFO.json files
+- **INFO.json cache busting**: all `raw.githubusercontent.com` INFO.json fetches now append `?t=${Date.now()}` — prevents browser and GitHub CDN from serving stale cached responses after INFO.json edits
+- **Milestones moved to `portfolio/timestamp`**: milestones are no longer stored in a separate `portfolio/milestones` Firestore document — they are entries with `type: 'milestone'` inside `portfolio/timestamp`; `loadAllData()` derives `FETCHED_MILESTONES` by filtering for `type === 'milestone'` directly from the timestamp array; the `portfolio/milestones` collection can be deleted
+
 ### Phase 4 — Milestones Edit Mode + Bug Fixes + Timeline Sort (May 8 2026)
-- **Milestone add complete**: "Add Milestone" button injected into the TIMESTAMPS section heading in edit mode; modal with title, description, and date fields; date stored as `MM-DD-YYYY`; entry written to Firestore `portfolio/milestones`; timeline re-renders in place without reload
-- **Milestone delete complete**: red X button on each milestone entry (visible in edit mode only); confirm modal matching universal delete spec; entry removed from Firestore `portfolio/milestones` by id; timeline re-renders in place
+- **Milestone add complete**: "Add Milestone" button injected into the TIMESTAMPS section heading in edit mode; modal with title, description, and date fields; date stored as `MM-DD-YYYY`; entry written to `portfolio/timestamp` with `type: 'milestone'`; timeline re-renders in place without reload
+- **Milestone delete complete**: red X button on each milestone entry (visible in edit mode only); confirm modal matching universal delete spec; entry removed from `portfolio/timestamp` by id; timeline re-renders in place
 - **Timeline sort by month**: entries within each year group are now sorted by month descending (newest first) — previously entries were pushed in source order (timeline → projects → certs → milestones) with no secondary sort; all four sources now carry a `month` field (1–12) used for sorting
 - **Bug — `education` default**: `loadAllData()` was defaulting `education` to `{}` (object) instead of `[]` (array) when the Firestore field was absent — broke `Array.isArray()` guards downstream; fixed to `|| []`
 - **Bug — `handleDocDelete` hard-gate removed**: an early `return` when `GH_TOKEN` was null was blocking Firestore deletion entirely; the inner `try/catch` around `ghDeleteFile` already handles GitHub failure gracefully — Firestore deletion now always proceeds regardless of GitHub cred state
 - **Bug — `certsRoot` class**: `#certsRoot` incorrectly had `class="certs-grid"` — the outer container was a flex wrapper causing company groups to sit side-by-side; class removed, groups now stack vertically as intended
 - **Bug — `text-align: justify` scoping**: the property was incorrectly applied to `input` elements via the shared `input, textarea` selector; moved to `.about-edit-field textarea` only, along with `resize: vertical`
 - **Non-bug — `parseStoredDate` hoisted**: function was declared inside `eduArr.forEach()` on every iteration; moved above the loop
-- **Firestore structure**: `portfolio/milestones` is now a live collection separate from `portfolio/timestamp`; `timestamp` retains repo slugs and education sync entries only
+- **Firestore structure**: milestones are stored in `portfolio/timestamp` with `type: 'milestone'` — there is no separate `portfolio/milestones` collection
 
 ### Phase 4 — WHO AM I? Edit Mode + Bug Fixes (May 7 2026)
 - **About edit modal complete**: Bio textarea, stackable Education entries (add/remove dynamically), Proficiency language picker — all write to Firestore `portfolio/about`
