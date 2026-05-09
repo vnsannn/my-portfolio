@@ -70,11 +70,13 @@ async function loadAllData() {
             FETCHED_MILESTONES = directEntries.filter(e => e.type === 'milestone');
 
             // Repo entries — fetch each INFO.json from GitHub
+            // Date comes from the Firestore entry (e.date), not INFO.json
             const results = await Promise.all(
                 repoEntries.map(e =>
-                    fetch(`https://raw.githubusercontent.com/${e.repo}/main/INFO.json`)
+                    fetch(`https://raw.githubusercontent.com/${e.repo}/main/INFO.json?t=${Date.now()}`)
                         .then(r => r.ok ? r.json() : null)
                         .catch(() => null)
+                        .then(data => data ? { ...data, _repo: e.repo, date: e.date || null } : null)
                 )
             );
             FETCHED_PROJECTS = results.filter(Boolean);
@@ -633,7 +635,7 @@ function renderProjects() {
 
     const byYear = {};
     FETCHED_PROJECTS.forEach(info => {
-        const y = info.year || new Date().getFullYear();
+        const y = info.date ? parseInt(info.date.split('-')[0]) : new Date().getFullYear();
         if (!byYear[y]) byYear[y] = [];
         byYear[y].push(info);
     });
@@ -650,7 +652,8 @@ function renderProjects() {
             const card = document.createElement('div');
             card.className = 'project-card';
 
-            if (info.id) card.dataset.projectId = info.id;
+            if (info.id)    card.dataset.projectId   = info.id;
+            if (info._repo) card.dataset.projectRepo = info._repo;
 
             const tagsHTML = (info.stack || []).map(t => `<span class="project-tag">${t}</span>`).join('');
 
@@ -671,6 +674,9 @@ function renderProjects() {
                 : '';
 
             card.innerHTML = `
+                <button class="project-card-delete" title="Delete project" aria-label="Delete project">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
                 <div class="project-card-preview">${previewHTML}</div>
                 <div class="project-card-body">
                     <div class="project-card-type">PROJECT</div>
@@ -698,8 +704,17 @@ function renderProjects() {
                 });
             }
 
+            const deleteBtn = card.querySelector('.project-card-delete');
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    openProjectDeleteModal({ repo: info._repo, name: info.name });
+                });
+            }
+
             card.addEventListener('click', (e) => {
                 if (e.target.closest('.project-card-actions')) return;
+                if (e.target.closest('.project-card-delete')) return;
                 const isExpanded = card.classList.contains('expanded');
                 document.querySelectorAll('.project-card.expanded').forEach(c => c.classList.remove('expanded'));
                 if (!isExpanded) card.classList.add('expanded');
@@ -878,15 +893,19 @@ function setEditMode(active) {
 
     const grid         = document.getElementById('homeDocsGrid');
     const timelineRoot = document.getElementById('timelineRoot');
+    const projectsRoot = document.getElementById('projectsRoot');
 
     if (active) {
         if (grid)         grid.classList.add('edit-active');
         if (timelineRoot) timelineRoot.classList.add('edit-active');
+        if (projectsRoot) projectsRoot.classList.add('edit-active');
         injectDocUploadBtn();
         injectMilestoneAddBtn();
+        injectProjectAddBtn();
     } else {
         if (grid)         grid.classList.remove('edit-active');
         if (timelineRoot) timelineRoot.classList.remove('edit-active');
+        if (projectsRoot) projectsRoot.classList.remove('edit-active');
         const btn = document.getElementById('docUploadBtn');
         if (btn) {
             btn.remove();
@@ -902,6 +921,8 @@ function setEditMode(active) {
         }
         const mBtn = document.getElementById('milestoneAddBtn');
         if (mBtn) mBtn.remove();
+        const pBtn = document.getElementById('projectAddBtn');
+        if (pBtn) pBtn.remove();
     }
 
     // ABOUT section — edu list delete buttons
@@ -970,7 +991,185 @@ function injectMilestoneAddBtn() {
     heading.appendChild(btn);
 }
 
-// ── MILESTONE ADD MODAL ───────────────────────────────────────
+function injectProjectAddBtn() {
+    if (document.getElementById('projectAddBtn')) return;
+    const heading = document.querySelector('#projectsContent .section-heading');
+    if (!heading) return;
+    const btn = document.createElement('button');
+    btn.id        = 'projectAddBtn';
+    btn.className = 'project-add-btn';
+    btn.type      = 'button';
+    btn.innerHTML = '<i class="fa-solid fa-plus"></i> New Project';
+    btn.addEventListener('click', openProjectAddModal);
+    heading.appendChild(btn);
+}
+
+// ── PROJECT ADD MODAL ─────────────────────────────────────────
+
+const projectAddOverlay  = document.getElementById('projectAddOverlay');
+const projectAddClose    = document.getElementById('projectAddClose');
+const projectRepoInput   = document.getElementById('projectRepoInput');
+const projectDateInput   = document.getElementById('projectDateInput');
+const projectAddSubmit   = document.getElementById('projectAddSubmit');
+const projectAddStatus   = document.getElementById('projectAddStatus');
+
+function openProjectAddModal() {
+    if (projectRepoInput) projectRepoInput.value = '';
+    if (projectDateInput) projectDateInput.value = '';
+    if (projectAddStatus) { projectAddStatus.textContent = ''; projectAddStatus.className = 'doc-upload-status'; }
+    if (projectAddSubmit) { projectAddSubmit.disabled = false; projectAddSubmit.innerHTML = '<i class="fa-brands fa-github"></i> Add Project'; }
+    if (projectAddOverlay) projectAddOverlay.classList.add('open');
+}
+
+function closeProjectAddModal() {
+    if (projectAddOverlay) projectAddOverlay.classList.remove('open');
+}
+
+function setProjectAddStatus(msg, type) {
+    if (!projectAddStatus) return;
+    projectAddStatus.textContent = msg;
+    projectAddStatus.className   = 'doc-upload-status' + (type ? ` ${type}` : '');
+}
+
+if (projectAddClose) projectAddClose.addEventListener('click', closeProjectAddModal);
+if (projectAddOverlay) {
+    projectAddOverlay.addEventListener('click', (e) => {
+        if (e.target === projectAddOverlay) closeProjectAddModal();
+    });
+}
+if (projectAddSubmit) projectAddSubmit.addEventListener('click', handleProjectAdd);
+
+async function handleProjectAdd() {
+    const raw  = (projectRepoInput?.value || '').trim();
+    const repo = raw.replace(/^https?:\/\/github\.com\//, '').replace(/\/$/, '');
+    const date = (projectDateInput?.value || '').trim(); // YYYY-MM from type="month"
+
+    if (!repo || !repo.includes('/')) {
+        setProjectAddStatus('Enter a valid repo slug e.g. nickname/project-repo', 'error');
+        if (projectRepoInput) projectRepoInput.focus();
+        return;
+    }
+
+    if (!date) {
+        setProjectAddStatus('Please select a month and year.', 'error');
+        if (projectDateInput) projectDateInput.focus();
+        return;
+    }
+
+    projectAddSubmit.disabled = true;
+    projectAddSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Verifying...';
+    setProjectAddStatus('', '');
+
+    try {
+        // Verify INFO.json exists and is valid
+        const res = await fetch(`https://raw.githubusercontent.com/${repo}/main/INFO.json?t=${Date.now()}`);
+        if (!res.ok) {
+            setProjectAddStatus(`Could not fetch INFO.json from ${repo} — is the repo public and does INFO.json exist?`, 'error');
+            projectAddSubmit.disabled = false;
+            projectAddSubmit.innerHTML = '<i class="fa-brands fa-github"></i> Add Project';
+            return;
+        }
+        const infoData = await res.json();
+
+        projectAddSubmit.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Saving...';
+
+        // Read current timestamp doc
+        const snap   = await getDoc(doc(_dDb, "portfolio", "timestamp"));
+        let tsData   = snap.exists() ? (snap.data().data || []) : [];
+
+        // Guard against duplicate
+        if (tsData.some(e => e.repo === repo)) {
+            setProjectAddStatus('This repo is already in the list.', 'error');
+            projectAddSubmit.disabled = false;
+            projectAddSubmit.innerHTML = '<i class="fa-brands fa-github"></i> Add Project';
+            return;
+        }
+
+        tsData.push({ repo, date });
+        await setDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
+
+        // Update local cache — date comes from Firestore entry, not INFO.json
+        FETCHED_PROJECTS.push({ ...infoData, _repo: repo, date });
+
+        renderProjects();
+        renderTimeline();
+        if (isEditMode) injectProjectAddBtn();
+
+        setProjectAddStatus(`"${infoData.name || repo}" added!`, 'success');
+        setTimeout(() => closeProjectAddModal(), 1200);
+
+    } catch (err) {
+        console.error('Project add error:', err);
+        setProjectAddStatus(`Failed: ${err.message || 'Unknown error'}`, 'error');
+        projectAddSubmit.disabled = false;
+        projectAddSubmit.innerHTML = '<i class="fa-brands fa-github"></i> Add Project';
+    }
+}
+
+// ── PROJECT DELETE MODAL ──────────────────────────────────────
+
+let pendingDeleteProject = null;
+
+const projectDeleteOverlay = document.getElementById('projectDeleteOverlay');
+const projectDeleteClose   = document.getElementById('projectDeleteClose');
+const projectDeleteCancel  = document.getElementById('projectDeleteCancel');
+const projectDeleteConfirm = document.getElementById('projectDeleteConfirm');
+const projectDeleteTitle   = document.getElementById('projectDeleteTitle');
+
+function openProjectDeleteModal(data) {
+    pendingDeleteProject = data;
+    if (projectDeleteTitle) projectDeleteTitle.textContent = data.name || data.repo || 'this project';
+    if (projectDeleteConfirm) {
+        projectDeleteConfirm.disabled = false;
+        projectDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
+    }
+    if (projectDeleteOverlay) projectDeleteOverlay.classList.add('open');
+}
+
+function closeProjectDeleteModal() {
+    if (projectDeleteOverlay) projectDeleteOverlay.classList.remove('open');
+    pendingDeleteProject = null;
+}
+
+if (projectDeleteClose)  projectDeleteClose.addEventListener('click',  closeProjectDeleteModal);
+if (projectDeleteCancel) projectDeleteCancel.addEventListener('click', closeProjectDeleteModal);
+if (projectDeleteOverlay) {
+    projectDeleteOverlay.addEventListener('click', (e) => {
+        if (e.target === projectDeleteOverlay) closeProjectDeleteModal();
+    });
+}
+if (projectDeleteConfirm) projectDeleteConfirm.addEventListener('click', handleProjectDelete);
+
+async function handleProjectDelete() {
+    if (!pendingDeleteProject) return;
+    const { repo } = pendingDeleteProject;
+
+    projectDeleteConfirm.disabled = true;
+    projectDeleteConfirm.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Deleting...';
+
+    try {
+        const snap  = await getDoc(doc(_dDb, "portfolio", "timestamp"));
+        let tsData  = snap.exists() ? (snap.data().data || []) : [];
+        tsData      = tsData.filter(e => e.repo !== repo);
+
+        await setDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
+
+        // Update local caches
+        FETCHED_PROJECTS = FETCHED_PROJECTS.filter(p => p._repo !== repo);
+        // Strip any timeline entries derived from this repo's INFO.json
+        // (those are repo-fetched, not stored as direct entries — just re-render)
+
+        closeProjectDeleteModal();
+        renderProjects();
+        renderTimeline();
+
+    } catch (err) {
+        console.error('Project delete error:', err);
+        projectDeleteConfirm.disabled = false;
+        projectDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
+        alert(`Delete failed: ${err.message || 'Unknown error'}`);
+    }
+}
 
 const milestoneAddOverlay  = document.getElementById('milestoneAddOverlay');
 const milestoneAddClose    = document.getElementById('milestoneAddClose');

@@ -553,6 +553,51 @@
         </div>
     </div>
 
+    <!-- PROJECT ADD MODAL -->
+    <div class="faq-overlay project-add-overlay" id="projectAddOverlay">
+        <div class="faq-card" id="projectAddCard">
+            <button class="faq-close" id="projectAddClose"><i class="fa-solid fa-xmark"></i></button>
+            <h3>New Project</h3>
+
+            <div class="doc-upload-fields">
+                <div class="doc-upload-field">
+                    <label for="projectRepoInput">GITHUB REPO</label>
+                    <input type="text" id="projectRepoInput" placeholder="nickname/project-repo" autocomplete="off" spellcheck="false">
+                </div>
+                <div class="doc-upload-field">
+                    <label for="projectDateInput">DATE</label>
+                    <input type="month" id="projectDateInput">
+                </div>
+            </div>
+            <p class="project-add-hint">The repo must be public and contain an <code>INFO.json</code> at the root.</p>
+
+            <button type="button" class="doc-upload-submit" id="projectAddSubmit">
+                <i class="fa-brands fa-github"></i> Add Project
+            </button>
+
+            <div class="doc-upload-status" id="projectAddStatus"></div>
+        </div>
+    </div>
+
+    <!-- PROJECT DELETE CONFIRM MODAL -->
+    <div class="faq-overlay project-delete-overlay" id="projectDeleteOverlay">
+        <div class="faq-card project-delete-card" id="projectDeleteCard">
+            <button class="faq-close" id="projectDeleteClose"><i class="fa-solid fa-xmark"></i></button>
+            <div class="doc-delete-body">
+                <i class="fa-solid fa-triangle-exclamation doc-delete-icon"></i>
+                <div class="doc-delete-heading">ARE YOU SURE?</div>
+                <div class="doc-delete-sub">The project you wanted to delete is <strong id="projectDeleteTitle"></strong>.</div>
+                <div class="doc-delete-note">This cannot be undone.</div>
+            </div>
+            <div class="doc-delete-actions">
+                <button type="button" class="doc-delete-cancel" id="projectDeleteCancel">CANCEL</button>
+                <button type="button" class="doc-delete-confirm" id="projectDeleteConfirm">
+                    <i class="fa-solid fa-trash"></i> YES, DELETE
+                </button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script type="module" src="../assets/js/dashboard.js"></script>
