@@ -1,8 +1,8 @@
 {
     "id": "PR-002",
     "name": "Developer VIEN - PORTFOLIO",
-    "year": 2025,
-    "date": "2025-05",
+    "year": 2026,
+    "date": "2026-05",
     "description": "Personal portfolio for an aspiring developer, Vien Calderon!",
     "about": "It is a unique web-based dev-portfolio for Vien Fritzgerald V. Calderon. It's goal is to simplify the hiring process of the man behind this site.",
     "contributions": "I built this bare-handed using front-end stacks of HTML, CSS, and JS then as for storing data such as projects, certifications and cv/resume, I use github-fetching capabilities with json as a highway in mind.",
