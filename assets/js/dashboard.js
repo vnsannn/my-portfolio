@@ -108,16 +108,23 @@ async function loadAllData() {
         }
     } catch {}
 
-    // 3. EmailJS credentials — sourced from _credentialsCache set by verifyEditorAccess().
-    // GitHub credentials (GH_TOKEN etc.) are NOT loaded here — they are set in the
-    // auth-gated startup only after isEditor is confirmed. This prevents GH_TOKEN
-    // from ever reaching visitor sessions (fixes S-01 / S-03).
-    try {
-        const json = _credentialsCache || {};
-        EMAILJS_SERVICE_ID  = json.emailjs?.serviceId  || null;
-        EMAILJS_TEMPLATE_ID = json.emailjs?.templateId || null;
-        EMAILJS_PUBLIC_KEY  = json.emailjs?.publicKey  || null;
-    } catch {}
+    // 3. EmailJS credentials — read from portfolio/config (publicly readable).
+    // For editor sessions the IIFE already populated EMAILJS_* before clearing
+    // _credentialsCache, so this block is a no-op for them (guard prevents a
+    // redundant Firestore read). For visitor sessions this is the primary source.
+    // GitHub credentials (GH_TOKEN etc.) are NOT loaded here — they are set in
+    // the auth-gated startup only after isEditor is confirmed (fixes S-01 / S-03).
+    if (!EMAILJS_PUBLIC_KEY) {
+        try {
+            const snap = await getDoc(doc(_dDb, 'portfolio', 'config'));
+            if (snap.exists()) {
+                const cfg = snap.data();
+                EMAILJS_SERVICE_ID  = cfg.emailjs?.serviceId  || null;
+                EMAILJS_TEMPLATE_ID = cfg.emailjs?.templateId || null;
+                EMAILJS_PUBLIC_KEY  = cfg.emailjs?.publicKey  || null;
+            }
+        } catch {}
+    }
 
     // 4. Language metadata
     try {
@@ -3107,6 +3114,14 @@ async function boot() {
         GH_TOKEN = gh.token || null;
         GH_OWNER = gh.owner || null;
         GH_REPO  = gh.repo  || null;
+
+        // EmailJS credentials — extracted here so loadAllData()'s portfolio/config
+        // read is skipped for editor sessions (EMAILJS_PUBLIC_KEY guard fires).
+        // Must happen before _credentialsCache is cleared below.
+        const ejs = _credentialsCache?.emailjs || {};
+        EMAILJS_SERVICE_ID  = ejs.serviceId  || null;
+        EMAILJS_TEMPLATE_ID = ejs.templateId || null;
+        EMAILJS_PUBLIC_KEY  = ejs.publicKey  || null;
 
         // Clear the cache — the raw credentials object should not linger in memory.
         _credentialsCache = null;
