@@ -1,21 +1,12 @@
-import { initializeApp } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-app.js";
-import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc }     from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
+import { firebaseApp }                             from "./firebase-config.js";
+import { getAuth, onAuthStateChanged, signOut }    from "https://www.gstatic.com/firebasejs/11.7.1/firebase-auth.js";
+import { getFirestore, doc, getDoc,
+         updateDoc, arrayUnion, arrayRemove }       from "https://www.gstatic.com/firebasejs/11.7.1/firebase-firestore.js";
 
-// ── FIREBASE INIT (dashboard) ─────────────────────────────────
+// ── FIREBASE INIT (uses shared firebase-config.js) ────────────
 
-const _dCfg = {
-    apiKey:            "AIzaSyAZLCVYWX2Nn6GYYYHpwSFkZXj2ZjIJhRE",
-    authDomain:        "developer-vien-portfolio.firebaseapp.com",
-    projectId:         "developer-vien-portfolio",
-    storageBucket:     "developer-vien-portfolio.firebasestorage.app",
-    messagingSenderId: "830687475736",
-    appId:             "1:830687475736:web:4ad1263787f0d1af112b6d"
-};
-
-const _dApp  = initializeApp(_dCfg);
-const _dAuth = getAuth(_dApp);
-const _dDb   = getFirestore(_dApp);
+const _dAuth = getAuth(firebaseApp);
+const _dDb   = getFirestore(firebaseApp);
 
 // ── DATA ─────────────────────────────────────────────────────
 
@@ -27,6 +18,26 @@ const LEVEL_DATA = [
     { level: 'Advanced',    color: '#8b5cf6', desc: 'Deep knowledge including internals, edge cases, and patterns. Can mentor others. Knows what they do not know and knows how to find it.' },
     { level: 'Expert',      color: '#ec4899', desc: 'Mastery. Contributes to the language or ecosystem itself, or is a go-to authority in professional settings. Rare.' },
 ];
+
+// ── HTML SANITIZE HELPER ─────────────────────────────────────
+// Guards against XSS from Firestore-sourced strings injected via innerHTML.
+// Since only Vien writes to Firestore this is self-XSS only, but good practice.
+function sanitize(str) {
+    return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+// ── URL SAFETY HELPER (S-04) ──────────────────────────────────
+// Used before injecting any URL into an href attribute.
+// Rejects javascript:, data:, and any other non-https scheme.
+// Returns true only for strings that start with https://.
+function isSafeUrl(url) {
+    return typeof url === 'string' && url.startsWith('https://');
+}
 
 // ── FETCHED DATA STORES ───────────────────────────────────────
 
@@ -44,10 +55,18 @@ let EMAILJS_TEMPLATE_ID = null;
 let EMAILJS_PUBLIC_KEY  = null;
 
 // ── GITHUB CREDENTIALS ────────────────────────────────────────
+// GH_TOKEN is only populated after isEditor is confirmed (see auth-gated startup).
+// It is never set for visitor sessions.
 
 let GH_TOKEN = null;
 let GH_OWNER = null;
 let GH_REPO  = null;
+
+// ── CREDENTIALS CACHE ─────────────────────────────────────────
+// verifyEditorAccess() reads portfolio/credentials once and caches it here.
+// loadAllData() then uses this cache — no second Firestore read needed.
+// Cleared after all fields are extracted so the raw object doesn't linger.
+let _credentialsCache = null;
 
 // ── LOAD ALL DATA ─────────────────────────────────────────────
 
@@ -89,15 +108,15 @@ async function loadAllData() {
         }
     } catch {}
 
-    // 3. EmailJS credentials
+    // 3. EmailJS credentials — sourced from _credentialsCache set by verifyEditorAccess().
+    // GitHub credentials (GH_TOKEN etc.) are NOT loaded here — they are set in the
+    // auth-gated startup only after isEditor is confirmed. This prevents GH_TOKEN
+    // from ever reaching visitor sessions (fixes S-01 / S-03).
     try {
-        const snap = await getDoc(doc(_dDb, "portfolio", "credentials"));
-        if (snap.exists()) {
-            const json = snap.data().data || {};
-            EMAILJS_SERVICE_ID  = json.emailjs?.serviceId  || null;
-            EMAILJS_TEMPLATE_ID = json.emailjs?.templateId || null;
-            EMAILJS_PUBLIC_KEY  = json.emailjs?.publicKey  || null;
-        }
+        const json = _credentialsCache || {};
+        EMAILJS_SERVICE_ID  = json.emailjs?.serviceId  || null;
+        EMAILJS_TEMPLATE_ID = json.emailjs?.templateId || null;
+        EMAILJS_PUBLIC_KEY  = json.emailjs?.publicKey  || null;
     } catch {}
 
     // 4. Language metadata
@@ -122,22 +141,9 @@ async function loadAllData() {
     } catch {}
 }
 
-// ── LOAD GITHUB CREDENTIALS ──────────────────────────────────
-
-async function loadGithubCredentials() {
-    try {
-        const snap = await getDoc(doc(_dDb, "portfolio", "credentials"));
-        if (!snap.exists()) return;
-        const json = snap.data().data || {};
-        GH_TOKEN = json.github?.token || null;
-        GH_OWNER = json.github?.owner || null;
-        GH_REPO  = json.github?.repo  || null;
-    } catch {
-        GH_TOKEN = null;
-        GH_OWNER = null;
-        GH_REPO  = null;
-    }
-}
+// Credentials are read once in verifyEditorAccess() and cached in _credentialsCache.
+// EmailJS fields are extracted in loadAllData(). GitHub fields are extracted in the
+// auth-gated startup — only after isEditor is confirmed. See S-01 / S-03 fix.
 
 // ── INIT ─────────────────────────────────────────────────────
 
@@ -148,7 +154,7 @@ let   isEditMode     = false;
 
 const badge    = document.getElementById('modeBadge');
 const header   = document.getElementById('dashHeader');
-const content  = document.getElementById('dashContent');
+// content (dashContent) removed — was grabbed but never used
 const navLinks = document.querySelectorAll('.nav-link');
 const sections = document.querySelectorAll('.dash-section');
 
@@ -160,35 +166,41 @@ function initBadge() {
 }
 
 // ── AUTH GATE ─────────────────────────────────────────────────
+// S-02 fix: auth state is resolved FIRST. Firestore is only read once a live
+// Firebase session is confirmed — making the credentials read authenticated.
+// Firestore rules must enforce request.auth != null on portfolio/credentials.
 
 async function verifyEditorAccess() {
-    let _allowed = null, _allowedUidEmail = null, _allowedUidGoogle = null;
+    // Step 1: Resolve current Firebase auth state without touching Firestore.
+    // Visitors with no session bail here — Firestore is never called for them.
+    const user = await new Promise((resolve) => {
+        const unsub = onAuthStateChanged(_dAuth, (u) => { unsub(); resolve(u); });
+    });
+
+    if (!user) return false;
+
+    // Step 2: User has a live Firebase session — read credentials now.
+    // The request is authenticated, so Firestore rules can enforce auth safely.
     try {
         const snap = await getDoc(doc(_dDb, "portfolio", "credentials"));
         if (!snap.exists()) return false;
-        const json        = snap.data().data || {};
-        _allowed          = json.auth?.allowed    || null;
-        _allowedUidEmail  = json.auth?.uid_email  || null;
-        _allowedUidGoogle = json.auth?.uid_google || null;
+        const json = snap.data().data || {};
 
+        // Cache for loadAllData() (EmailJS) and the IIFE below (GitHub) — S-03 fix.
+        _credentialsCache = json;
 
-    } catch (err) {
+        const _allowed          = json.auth?.allowed    || null;
+        const _allowedUidEmail  = json.auth?.uid_email  || null;
+        const _allowedUidGoogle = json.auth?.uid_google || null;
+
+        if (!_allowed || (!_allowedUidEmail && !_allowedUidGoogle)) return false;
+
+        const isGoogleUid = user.uid === _allowedUidGoogle;
+        const isEmailUid  = user.uid === _allowedUidEmail && user.email === _allowed;
+        return isGoogleUid || isEmailUid;
+    } catch {
         return false;
     }
-
-    if (!_allowed || (!_allowedUidEmail && !_allowedUidGoogle)) {
-        return false;
-    }
-
-    return new Promise((resolve) => {
-        const unsub = onAuthStateChanged(_dAuth, (user) => {
-            unsub();
-            if (!user) { resolve(false); return; }
-            const isGoogleUid = user.uid === _allowedUidGoogle;
-            const isEmailUid  = user.uid === _allowedUidEmail && user.email === _allowed;
-            resolve(isGoogleUid || isEmailUid);
-        });
-    });
 }
 
 // ── PDF.js WORKER CONFIG ──────────────────────────────────────
@@ -250,14 +262,7 @@ navLinks.forEach(link => {
 // ── HEADER HIDE/SHOW ──────────────────────────────────────────
 
 let headerVisible = true;
-let ticking       = false;
-
-function hideHeader() {
-    if (headerVisible) {
-        header.classList.add('hidden');
-        headerVisible = false;
-    }
-}
+// ticking removed — only used in the commented-out RAF block
 
 function showHeader() {
     if (!headerVisible) {
@@ -303,8 +308,12 @@ sections.forEach(section => attachScrollListener(section));
 document.querySelectorAll('.section-with-profile').forEach(el => attachScrollListener(el));
 
 // ── SECTION-HIJACK SCROLL ─────────────────────────────────────
+// U-02: requires two consecutive at-boundary wheel events in the same direction
+// before switching sections, preventing accidental jumps during slow/careful scrolling.
 
 let hijackCooldown = false;
+let _hijackPrimed  = false;  // U-02: true after the first at-boundary event
+let _hijackPrimedDir = 0;    // U-02: direction of the primed event (1 or -1)
 
 function getAdjacentSection(dir) {
     const idx  = SECTION_ORDER.indexOf(currentSection);
@@ -315,11 +324,20 @@ function getAdjacentSection(dir) {
 
 function tryHijack(dir) {
     if (hijackCooldown) return;
-    const target = getAdjacentSection(dir);
-    if (!target) return;
-    hijackCooldown = true;
-    switchSection(target);
-    setTimeout(() => { hijackCooldown = false; }, 300);
+    // U-02: only switch if the same direction was primed on the previous event
+    if (_hijackPrimed && _hijackPrimedDir === dir) {
+        _hijackPrimed = false;
+        _hijackPrimedDir = 0;
+        const target = getAdjacentSection(dir);
+        if (!target) return;
+        hijackCooldown = true;
+        switchSection(target);
+        setTimeout(() => { hijackCooldown = false; }, 300);
+    } else {
+        // Prime for next event
+        _hijackPrimed = true;
+        _hijackPrimedDir = dir;
+    }
 }
 
 document.addEventListener('wheel', (e) => {
@@ -334,8 +352,9 @@ document.addEventListener('wheel', (e) => {
     const atBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 5;
     const atTop    = scrollEl.scrollTop <= 0;
 
-    if (e.deltaY > 0 && atBottom)  tryHijack(1);
-    else if (e.deltaY < 0 && atTop) tryHijack(-1);
+    if (e.deltaY > 0 && atBottom)       tryHijack(1);
+    else if (e.deltaY < 0 && atTop)     tryHijack(-1);
+    else { _hijackPrimed = false; _hijackPrimedDir = 0; } // U-02: cancel prime if not at boundary
 }, { passive: true });
 
 let touchStartY = 0;
@@ -531,8 +550,8 @@ function renderTimeline() {
             el.innerHTML = `
                 ${milestoneDeleteHTML}
                 <div class="timeline-entry-body">
-                    <span class="timeline-entry-title">${entry.title}</span>
-                    ${entry.desc ? `<span class="timeline-entry-desc">${entry.desc}</span>` : ''}
+                    <span class="timeline-entry-title">${sanitize(entry.title)}</span>
+                    ${entry.desc ? `<span class="timeline-entry-desc">${sanitize(entry.desc)}</span>` : ''}
                 </div>
                 <div class="timeline-entry-reveal">
                     <div class="timeline-entry-reveal-inner">
@@ -649,22 +668,26 @@ function renderProjects() {
             if (info.id)    card.dataset.projectId   = info.id;
             if (info._repo) card.dataset.projectRepo = info._repo;
 
-            const tagsHTML = (info.stack || []).map(t => `<span class="project-tag">${t}</span>`).join('');
+            const tagsHTML = (info.stack || []).map(t => `<span class="project-tag">${sanitize(t)}</span>`).join('');
 
-            const liveBtnHTML = info.live
-                ? `<a href="${info.live}" target="_blank" class="doc-card-btn view"><i class="fa-solid fa-arrow-up-right-from-square"></i> LIVE</a>`
+            // S-04: info.live and info.source validated to https:// before use as href,
+            // then passed through sanitize(). A javascript: or data: value is silently
+            // treated as absent and falls back to the "NO LIVE" / empty state.
+            const liveBtnHTML = info.live && isSafeUrl(info.live)
+                ? `<a href="${sanitize(info.live)}" target="_blank" rel="noopener noreferrer" class="doc-card-btn view"><i class="fa-solid fa-arrow-up-right-from-square"></i> LIVE</a>`
                 : `<span class="doc-card-btn view" style="opacity:0.3;cursor:not-allowed;pointer-events:none;"><i class="fa-solid fa-ban"></i> NO LIVE</span>`;
 
-            const sourceBtnHTML = info.source
-                ? `<a href="${info.source}" target="_blank" class="doc-card-btn download"><i class="fa-brands fa-github"></i> SOURCE</a>`
+            const sourceBtnHTML = info.source && isSafeUrl(info.source)
+                ? `<a href="${sanitize(info.source)}" target="_blank" rel="noopener noreferrer" class="doc-card-btn download"><i class="fa-brands fa-github"></i> SOURCE</a>`
                 : '';
 
+            // S-04: info.banner passed through sanitize(); alt also sanitized.
             const previewHTML = info.banner
-                ? `<img src="${info.banner}" alt="${info.name}" class="project-card-banner">`
+                ? `<img src="${sanitize(info.banner)}" alt="${sanitize(info.name || '')}" class="project-card-banner">`
                 : `<i class="fa-solid fa-code project-card-placeholder-icon"></i>`;
 
             const contribHTML = info.contributions
-                ? `<div class="project-card-contribution">${info.contributions}</div>`
+                ? `<div class="project-card-contribution">${sanitize(info.contributions)}</div>`
                 : '';
 
             card.innerHTML = `
@@ -674,8 +697,8 @@ function renderProjects() {
                 <div class="project-card-preview">${previewHTML}</div>
                 <div class="project-card-body">
                     <div class="project-card-type">PROJECT</div>
-                    <div class="project-name">${info.name}</div>
-                    <div class="project-desc">${info.description || ''}</div>
+                    <div class="project-name">${sanitize(info.name)}</div>
+                    <div class="project-desc">${sanitize(info.description || '')}</div>
                     <div class="project-tags">${tagsHTML}</div>
                 </div>
                 <div class="project-card-expand">
@@ -756,8 +779,8 @@ function renderDocCard(data) {
             <i class="fa-regular fa-file-pdf doc-card-placeholder-icon"></i>
         </div>
         <div class="doc-card-body">
-            <div class="doc-card-type">${(data.type || 'DOCUMENT').toUpperCase()}</div>
-            <div class="doc-card-title">${data.title}</div>
+            <div class="doc-card-type">${sanitize((data.type || 'DOCUMENT')).toUpperCase()}</div>
+            <div class="doc-card-title">${sanitize(data.title)}</div>
             <div class="doc-card-date">${dateStr}</div>
         </div>
         <div class="doc-card-expand">
@@ -1010,7 +1033,7 @@ function injectCertAddBtn() {
     heading.appendChild(btn);
 }
 
-// ── CERT UPLOAD MODAL ─────────────────────────────────────────
+// ── PROJECT ADD MODAL ─────────────────────────────────────────
 
 const projectAddOverlay  = document.getElementById('projectAddOverlay');
 const projectAddClose    = document.getElementById('projectAddClose');
@@ -1091,8 +1114,9 @@ async function handleProjectAdd() {
             return;
         }
 
-        tsData.push({ repo, date });
-        await setDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
+        // B-06: arrayUnion atomically appends — concurrent adds from other tabs are preserved
+        const newEntry = { repo, date };
+        await updateDoc(doc(_dDb, "portfolio", "timestamp"), { data: arrayUnion(newEntry) });
 
         // Update local cache
         FETCHED_PROJECTS.push({ ...infoData, _repo: repo, date });
@@ -1156,12 +1180,14 @@ async function handleProjectDelete() {
 
     try {
         const snap  = await getDoc(doc(_dDb, "portfolio", "timestamp"));
-        let tsData  = snap.exists() ? (snap.data().data || []) : [];
-        tsData      = tsData.filter(e => e.repo !== repo);
+        const tsData = snap.exists() ? (snap.data().data || []) : [];
+        // B-06: arrayRemove only removes this entry — other tabs' concurrent adds survive
+        const entryToRemove = tsData.find(e => e.repo === repo);
+        if (entryToRemove) {
+            await updateDoc(doc(_dDb, "portfolio", "timestamp"), { data: arrayRemove(entryToRemove) });
+        }
 
-        await setDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
-
-        // Update local caches
+        // Update local cache — no longer reading tsData post-write
         FETCHED_PROJECTS = FETCHED_PROJECTS.filter(p => p._repo !== repo);
 
         closeProjectDeleteModal();
@@ -1172,8 +1198,8 @@ async function handleProjectDelete() {
     } catch (err) {
         console.error('Project delete error:', err);
         projectDeleteConfirm.disabled = false;
-        projectDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
-        alert(`Delete failed: ${err.message || 'Unknown error'}`);
+        projectDeleteConfirm.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> FAILED';
+        setTimeout(() => { projectDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE'; }, 2000);
     }
 }
 
@@ -1258,20 +1284,11 @@ async function handleMilestoneAdd() {
         const id    = `milestone-${Date.now()}`;
         const entry = { id, type: 'milestone', title, desc, date: dateStored };
 
-        // Read current timestamp doc from Firestore
-        const snap = await getDoc(doc(_dDb, "portfolio", "timestamp"));
-        let tsData = [];
-        if (snap.exists()) {
-            tsData = snap.data().data || [];
-        }
+        // B-06: arrayUnion atomically appends — no full pre-read needed
+        await updateDoc(doc(_dDb, "portfolio", "timestamp"), { data: arrayUnion(entry) });
 
-        tsData.push(entry);
-
-        await setDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
-
-        // Update local caches and re-render
-        FETCHED_MILESTONES = tsData.filter(e => e.type === 'milestone');
-        FETCHED_TIMELINE   = tsData.filter(e => !e.repo && e.type !== 'milestone');
+        // Update local caches directly
+        FETCHED_MILESTONES = [...FETCHED_MILESTONES, entry];
         renderTimeline();
 
         if (isEditMode) injectMilestoneAddBtn();
@@ -1335,13 +1352,15 @@ async function handleMilestoneDelete() {
 
     try {
         const snap   = await getDoc(doc(_dDb, "portfolio", "timestamp"));
-        let tsData   = snap.exists() ? (snap.data().data || []) : [];
-        tsData       = tsData.filter(e => e.id !== id);
+        const tsData = snap.exists() ? (snap.data().data || []) : [];
+        // B-06: arrayRemove only removes this entry — other tabs' concurrent adds survive
+        const entryToRemove = tsData.find(e => e.id === id);
+        if (entryToRemove) {
+            await updateDoc(doc(_dDb, "portfolio", "timestamp"), { data: arrayRemove(entryToRemove) });
+        }
 
-        await setDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
-
-        FETCHED_MILESTONES = tsData.filter(e => e.type === 'milestone');
-        FETCHED_TIMELINE   = tsData.filter(e => !e.repo && e.type !== 'milestone');
+        FETCHED_MILESTONES = FETCHED_MILESTONES.filter(e => e.id !== id);
+        // FETCHED_TIMELINE never contains milestones — no update needed
 
         closeMilestoneDeleteModal();
         renderTimeline();
@@ -1349,8 +1368,8 @@ async function handleMilestoneDelete() {
     } catch (err) {
         console.error('Milestone delete error:', err);
         milestoneDeleteConfirm.disabled = false;
-        milestoneDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
-        alert(`Delete failed: ${err.message || 'Unknown error'}`);
+        milestoneDeleteConfirm.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> FAILED';
+        setTimeout(() => { milestoneDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE'; }, 2000);
     }
 }
 
@@ -1506,9 +1525,11 @@ async function handleDocUpload() {
 
     try {
         // Auto-generate fields
-        const id       = `doc-${Date.now()}`;
-        const fileName = selectedDocFile.name;
-        const filePath = `data/files/${fileName}`;
+        const id           = `doc-${Date.now()}`;
+        const rawFileName  = selectedDocFile.name;
+        // FIX: sanitize filename — replace spaces and unsafe chars before building path
+        const fileName     = rawFileName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]/g, '');
+        const filePath     = `data/files/${fileName}`;
         const uploaded = new Date().toISOString().split('T')[0];
         const typeKey  = docTypeSelect?.value || 'resume'; // 'resume' | 'cv'
         const typeLabel = typeKey === 'cv' ? 'CV' : 'Resume';
@@ -1523,36 +1544,34 @@ async function handleDocUpload() {
 
         setUploadStatus('Pushing to GitHub...', '');
 
-        // Push file to GitHub
-        await ghPushFile(filePath, base64, `Add document: ${fileName}`);
+        // FIX: fetch existing SHA so re-uploading same filename works
+        const existingSha = await ghGetSHA(filePath);
+        await ghPushFile(filePath, base64, `Add document: ${fileName}`, existingSha);
 
         setUploadStatus('Saving to Firestore...', '');
 
-        // Read current docs from Firestore
-        const snap = await getDoc(doc(_dDb, "portfolio", "docs"));
-        let docData = { cv: [], resume: [] };
-        if (snap.exists()) {
-            const json = snap.data().data || {};
-            docData = {
-                cv:     json.cv     || [],
-                resume: json.resume || []
-            };
-        }
+        // B-07: Pre-read to detect an existing entry for the same filePath.
+        // ghGetSHA already replaced the file on GitHub — without this check a second
+        // Firestore entry would be created pointing to the same path, orphaning one
+        // card after the first deletion.
+        const docsSnap    = await getDoc(doc(_dDb, "portfolio", "docs"));
+        const docsData    = docsSnap.exists() ? (docsSnap.data().data || {}) : {};
+        const currentArr  = docsData[typeKey] || [];
+        const existingIdx = currentArr.findIndex(e => e.file === filePath);
 
-        // Build new entry
-        const entry = { id, title, type: typeLabel, uploaded, file: filePath };
-
-        // Append to the correct array
-        if (typeKey === 'cv') {
-            docData.cv.push(entry);
+        if (existingIdx >= 0) {
+            // Same filename already has a metadata entry — update it in place,
+            // preserving its original id so no existing references break.
+            const updated = [...currentArr];
+            updated[existingIdx] = { ...currentArr[existingIdx], title, type: typeLabel, uploaded };
+            await updateDoc(doc(_dDb, "portfolio", "docs"), { [`data.${typeKey}`]: updated });
+            setUploadStatus('File replaced — existing entry updated.', 'success');
         } else {
-            docData.resume.push(entry);
+            // No duplicate — safe to append atomically (B-06).
+            const entry = { id, title, type: typeLabel, uploaded, file: filePath };
+            await updateDoc(doc(_dDb, "portfolio", "docs"), { [`data.${typeKey}`]: arrayUnion(entry) });
+            setUploadStatus('Uploaded successfully!', 'success');
         }
-
-        // Write back to Firestore
-        await setDoc(doc(_dDb, "portfolio", "docs"), { data: docData });
-
-        setUploadStatus('Uploaded successfully!', 'success');
 
         // Re-render docs in place
         await renderDocs();
@@ -1625,20 +1644,17 @@ async function handleDocDelete() {
             }
         }
 
-        // 2. Read Firestore docs
-        const snap = await getDoc(doc(_dDb, "portfolio", "docs"));
-        let docData = { cv: [], resume: [] };
-        if (snap.exists()) {
-            const json = snap.data().data || {};
-            docData = { cv: json.cv || [], resume: json.resume || [] };
-        }
-
-        // 3. Remove from the correct array by id
+        // 2. Read Firestore docs — needed to locate the exact object for arrayRemove
         const typeKey = (type || '').toLowerCase() === 'cv' ? 'cv' : 'resume';
-        docData[typeKey] = docData[typeKey].filter(entry => entry.id !== id);
+        const snap = await getDoc(doc(_dDb, "portfolio", "docs"));
+        const json = snap.exists() ? (snap.data().data || {}) : {};
+        const arr  = (typeKey === 'cv' ? json.cv : json.resume) || [];
 
-        // 4. Write back to Firestore
-        await setDoc(doc(_dDb, "portfolio", "docs"), { data: docData });
+        // 3. B-06: arrayRemove only removes this entry — other tabs' concurrent adds survive
+        const entryToRemove = arr.find(e => e.id === id);
+        if (entryToRemove) {
+            await updateDoc(doc(_dDb, "portfolio", "docs"), { [`data.${typeKey}`]: arrayRemove(entryToRemove) });
+        }
 
         // 5. Close modal and re-render
         closeDocDeleteModal();
@@ -1647,8 +1663,8 @@ async function handleDocDelete() {
     } catch (err) {
         console.error('Doc delete error:', err);
         docDeleteConfirm.disabled = false;
-        docDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
-        alert(`Delete failed: ${err.message || 'Unknown error'}`);
+        docDeleteConfirm.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> FAILED';
+        setTimeout(() => { docDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE'; }, 2000);
     }
 }
 
@@ -1753,6 +1769,47 @@ if (reachForm) {
 
 // ── PROFILE CARD COLLAPSE / EXPAND ───────────────────────────
 
+// ── PROFILE CARD CLONING (B-03 fix) ──────────────────────────
+// The canonical profile card lives in #section-about (id="profileCard").
+// We clone it into the three placeholder divs for Timeline, Projects, and
+// Certificates so there is a single source of truth in the HTML.
+// IDs on the clone are remapped so the existing profileCardGroups logic
+// below can still find them by their expected IDs.
+
+(function cloneProfileCards() {
+    const source = document.getElementById('profileCard');
+    if (!source) return;
+
+    const targets = [
+        { containerId: 'profileCardTimeline',     newId: 'profileCardTimeline'     },
+        { containerId: 'profileCardProjects',      newId: 'profileCardProjects'     },
+        { containerId: 'profileCardCertificates',  newId: 'profileCardCertificates' },
+    ];
+
+    targets.forEach(({ containerId, newId }) => {
+        const container = document.getElementById(containerId);
+        if (!container) return;
+
+        const clone = source.cloneNode(true);
+
+        // Give the clone its expected ID and mark it as a clone
+        clone.id = newId;
+        clone.classList.add('profile-card-clone');
+
+        // Remove the collapse button's unique id (not needed on clones —
+        // the querySelectorAll('.profile-card-collapse') in setProfileCardState
+        // picks it up by class)
+        const collapseBtn = clone.querySelector('.profile-card-collapse');
+        if (collapseBtn) {
+            collapseBtn.removeAttribute('id');
+            collapseBtn.classList.add('profile-card-collapse-clone');
+        }
+
+        // Replace the placeholder div's content with the cloned card
+        container.replaceWith(clone);
+    });
+})();
+
 const profileCardGroups = [
     {
         card:      document.getElementById('profileCard'),
@@ -1843,7 +1900,13 @@ setInterval(updateAge, 1000 * 60);
 function populateStats() {
     const projectCount = FETCHED_PROJECTS.length;
     const certCount    = FETCHED_CERTS.length;
-    const startYear    = 2025;
+    // Q-05: derive startYear from data instead of hardcoding — prevents silent drift each year.
+    // Falls back to current year if no data exists (yearsExp will be 0).
+    const allYears = [
+        ...FETCHED_TIMELINE.map(e => e.date ? parseInt(e.date.split('-')[0]) : null),
+        ...FETCHED_MILESTONES.map(e => e.date ? parseInt(e.date.split('-').pop()) : null),
+    ].filter(y => y && !isNaN(y));
+    const startYear    = allYears.length > 0 ? Math.min(...allYears) : new Date().getFullYear();
     const yearsExp     = new Date().getFullYear() - startYear;
     const langCount    = (FETCHED_ABOUT.proficiency || []).length;
 
@@ -1923,7 +1986,11 @@ function renderSkills() {
         `;
         legendEl.appendChild(item);
     });
-    legendEl.innerHTML += `<div class="skills-legend-hint">CLICK FOR DETAILS</div>`;
+    // Q-04: use appendChild instead of innerHTML += to avoid re-parsing the entire subtree
+    const hint = document.createElement('div');
+    hint.className = 'skills-legend-hint';
+    hint.textContent = 'CLICK FOR DETAILS';
+    legendEl.appendChild(hint);
 
     const modalContent = document.getElementById('levelsModalContent');
     if (modalContent) {
@@ -2088,8 +2155,8 @@ function renderCertCard(data, companyLabel = null) {
             ${companyOverlayHTML}
         </div>
         <div class="cert-card-body">
-            <div class="cert-card-title">${data.title}</div>
-            ${data.details ? `<div class="cert-card-details">${data.details}</div>` : ''}
+            <div class="cert-card-title">${sanitize(data.title)}</div>
+            ${data.details ? `<div class="cert-card-details">${sanitize(data.details)}</div>` : ''}
             ${dateStr ? `<div class="cert-card-date">${dateStr}</div>` : ''}
         </div>
     `;
@@ -2341,9 +2408,11 @@ async function handleCertUpload() {
     setCertUploadStatus('', '');
 
     try {
-        const id       = `cert-${Date.now()}`;
-        const fileName = selectedCertFile.name;
-        const filePath = `data/files/${fileName}`;
+        const id           = `cert-${Date.now()}`;
+        const rawFileName  = selectedCertFile.name;
+        // FIX: sanitize filename — replace spaces and unsafe chars before building path
+        const fileName     = rawFileName.replace(/\s+/g, '-').replace(/[^a-zA-Z0-9._-]/g, '');
+        const filePath     = `data/files/${fileName}`;
 
         const base64 = await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -2353,20 +2422,36 @@ async function handleCertUpload() {
         });
 
         setCertUploadStatus('Pushing to GitHub...', '');
-        await ghPushFile(filePath, base64, `Add certificate: ${fileName}`);
+        // FIX: fetch existing SHA so re-uploading same filename works
+        const certExistingSha = await ghGetSHA(filePath);
+        await ghPushFile(filePath, base64, `Add certificate: ${fileName}`, certExistingSha);
 
         setCertUploadStatus('Saving to Firestore...', '');
 
-        const snap  = await getDoc(doc(_dDb, "portfolio", "certs"));
-        const raw   = snap.exists() ? snap.data().data : null;
-        let certs   = Array.isArray(raw) ? raw : (raw?.certificates || []);
+        // B-07: Check FETCHED_CERTS for an existing entry with the same filePath.
+        // FETCHED_CERTS is kept in sync, so this avoids an extra Firestore read
+        // in the common case (new file). Only reads Firestore when a duplicate is found.
+        const existingCert = FETCHED_CERTS.find(c => c.file === filePath);
 
-        const entry = { id, title, details, company, date, file: filePath };
-        certs.push(entry);
-
-        await setDoc(doc(_dDb, "portfolio", "certs"), { data: certs });
-
-        FETCHED_CERTS = certs;
+        if (existingCert) {
+            // Same filename already has a metadata entry — update it in place,
+            // preserving its original id so no existing references break.
+            const certsSnap = await getDoc(doc(_dDb, "portfolio", "certs"));
+            const raw       = certsSnap.exists() ? certsSnap.data().data : null;
+            const certsArr  = Array.isArray(raw) ? raw : (raw?.certificates || []);
+            const updated   = certsArr.map(c =>
+                c.file === filePath ? { ...c, title, details, company, date } : c
+            );
+            await updateDoc(doc(_dDb, "portfolio", "certs"), { data: updated });
+            FETCHED_CERTS = updated;
+            setCertUploadStatus('Certificate replaced — existing entry updated.', 'success');
+        } else {
+            // No duplicate — safe to append atomically (B-06).
+            const entry = { id, title, details, company, date, file: filePath };
+            await updateDoc(doc(_dDb, "portfolio", "certs"), { data: arrayUnion(entry) });
+            FETCHED_CERTS = [...FETCHED_CERTS, entry];
+            setCertUploadStatus('Certificate uploaded!', 'success');
+        }
         renderCerts();
         renderTimeline();
         populateStats();
@@ -2374,8 +2459,6 @@ async function handleCertUpload() {
             injectCertAddBtn();
             document.getElementById('certsRoot')?.classList.add('edit-active');
         }
-
-        setCertUploadStatus('Certificate uploaded!', 'success');
         setTimeout(() => closeCertUploadModal(), 1200);
 
     } catch (err) {
@@ -2438,12 +2521,14 @@ async function handleCertDelete() {
 
         const snap  = await getDoc(doc(_dDb, "portfolio", "certs"));
         const raw   = snap.exists() ? snap.data().data : null;
-        let certs   = Array.isArray(raw) ? raw : (raw?.certificates || []);
-        certs       = certs.filter(c => c.id !== id);
+        const certs = Array.isArray(raw) ? raw : (raw?.certificates || []);
+        // B-06: arrayRemove only removes this entry — other tabs' concurrent adds survive
+        const certToRemove = certs.find(c => c.id === id);
+        if (certToRemove) {
+            await updateDoc(doc(_dDb, "portfolio", "certs"), { data: arrayRemove(certToRemove) });
+        }
 
-        await setDoc(doc(_dDb, "portfolio", "certs"), { data: certs });
-
-        FETCHED_CERTS = certs;
+        FETCHED_CERTS = FETCHED_CERTS.filter(c => c.id !== id);
         closeCertDeleteModal();
         renderCerts();
         renderTimeline();
@@ -2456,8 +2541,8 @@ async function handleCertDelete() {
     } catch (err) {
         console.error('Cert delete error:', err);
         certDeleteConfirm.disabled = false;
-        certDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
-        alert(`Delete failed: ${err.message || 'Unknown error'}`);
+        certDeleteConfirm.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> FAILED';
+        setTimeout(() => { certDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE'; }, 2000);
     }
 }
 
@@ -2496,8 +2581,10 @@ const aboutEduDeleteClose     = document.getElementById('aboutEduDeleteClose');
 const aboutEduDeleteCancel    = document.getElementById('aboutEduDeleteCancel');
 const aboutEduDeleteConfirm   = document.getElementById('aboutEduDeleteConfirm');
 
-let stagedLangs = [];
-let stagedEdu   = [];
+let stagedLangs  = [];
+let stagedEdu    = [];
+// B-09: true whenever the about edit modal has unsaved changes
+let _aboutDirty  = false;
 
 // ── ABOUT EDIT — OPEN / CLOSE ─────────────────────────────────
 
@@ -2528,15 +2615,21 @@ function openAboutEditModal() {
     if (aboutEditSave)     { aboutEditSave.disabled = false; aboutEditSave.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> SAVE'; }
 
     if (aboutEditOverlay) aboutEditOverlay.classList.add('open');
+    // B-09: reset dirty flag — opening always starts from a clean snapshot
+    _aboutDirty = false;
 }
 
 function closeAboutEditModal() {
     if (aboutEditOverlay) aboutEditOverlay.classList.remove('open');
+    // B-09: cancelled or closed = staged changes discarded = no longer dirty
+    _aboutDirty = false;
 }
 
 if (aboutEditBtn)     aboutEditBtn.addEventListener('click', openAboutEditModal);
 if (aboutEditClose)   aboutEditClose.addEventListener('click', closeAboutEditModal);
 if (aboutEditCancel)  aboutEditCancel.addEventListener('click', closeAboutEditModal);
+// B-09: mark dirty on any field change inside the about modal
+if (aboutBioInput)    aboutBioInput.addEventListener('input', () => { _aboutDirty = true; });
 if (aboutEditOverlay) {
     aboutEditOverlay.addEventListener('click', (e) => {
         if (e.target !== aboutEditOverlay) return;
@@ -2618,6 +2711,7 @@ function renderStagedLangs() {
         `;
         row.querySelector('.about-lang-staged-remove').addEventListener('click', () => {
             stagedLangs.splice(idx, 1);
+            _aboutDirty = true; // B-09
             renderStagedLangs();
         });
         aboutLangStaged.appendChild(row);
@@ -2655,6 +2749,9 @@ function renderStagedEdu() {
     stagedEdu.forEach((edu, idx) => {
         const block = document.createElement('div');
         block.className = 'edu-entry-block';
+        // B-08: Values are assigned via .value below — NOT interpolated into innerHTML.
+        // Interpolating user data into value="..." breaks on double-quotes and can
+        // inject unexpected HTML. Separating structure from data is the safe pattern.
         block.innerHTML = `
             <div class="edu-entry-block-header">
                 <span class="edu-entry-block-num">ENTRY ${idx + 1}</span>
@@ -2664,48 +2761,58 @@ function renderStagedEdu() {
             </div>
             <div class="about-edit-field">
                 <label>COURSE</label>
-                <input type="text" class="edu-f-course" value="${edu.course || ''}"
+                <input type="text" class="edu-f-course" value=""
                     placeholder="e.g. Bachelor of Science in Information Technology" autocomplete="off">
             </div>
             <div class="about-edit-field">
                 <label>SCHOOL</label>
-                <input type="text" class="edu-f-school" value="${edu.school || ''}"
+                <input type="text" class="edu-f-school" value=""
                     placeholder="e.g. Dalubhasaang Politekniko ng Lungsod ng Baliwag" autocomplete="off">
             </div>
             <div class="about-edit-field-row">
                 <div class="about-edit-field">
                     <label>START</label>
-                    <input type="date" class="edu-f-start" value="${toInputDate(edu.schoolStart)}">
+                    <input type="date" class="edu-f-start" value="">
                 </div>
                 <div class="about-edit-field">
                     <label>END</label>
-                    <input type="date" class="edu-f-end" value="${toInputDate(edu.schoolEnd)}">
+                    <input type="date" class="edu-f-end" value="">
                 </div>
             </div>
             <div class="about-edit-field">
                 <label>CURRENT YEAR</label>
-                <input type="text" class="edu-f-year" value="${edu.year || ''}"
+                <input type="text" class="edu-f-year" value=""
                     placeholder="e.g. 1st Year, 2nd Year, ..." autocomplete="off">
             </div>
         `;
+        // B-08: Assign values directly on the DOM elements — fully safe against quote injection.
+        block.querySelector('.edu-f-course').value = edu.course      || '';
+        block.querySelector('.edu-f-school').value = edu.school      || '';
+        block.querySelector('.edu-f-start').value  = toInputDate(edu.schoolStart);
+        block.querySelector('.edu-f-end').value    = toInputDate(edu.schoolEnd);
+        block.querySelector('.edu-f-year').value   = edu.year        || '';
 
         block.querySelector('.edu-entry-remove-btn').addEventListener('click', () => {
             stagedEdu.splice(idx, 1);
+            _aboutDirty = true; // B-09
             renderStagedEdu();
         });
 
         // Live-sync inputs back into stagedEdu so values survive re-renders
         ['course','school','year'].forEach(field => {
             block.querySelector(`.edu-f-${field}`).addEventListener('input', e => {
-                stagedEdu[idx][field === 'course' ? 'course'
-                    : field === 'school' ? 'school' : 'year'] = e.target.value;
+                // FIX: was a redundant ternary — field is already the key
+                stagedEdu[idx][field] = e.target.value;
+                _aboutDirty = true; // B-09
             });
         });
         block.querySelector('.edu-f-start').addEventListener('change', e => {
             stagedEdu[idx].schoolStart = fromInputDate(e.target.value);
+            _aboutDirty = true; // B-09
         });
         block.querySelector('.edu-f-end').addEventListener('change', e => {
             stagedEdu[idx].schoolEnd = fromInputDate(e.target.value);
+            _aboutDirty = true; // B-09
         });
 
         eduEntriesList.appendChild(block);
@@ -2715,6 +2822,7 @@ function renderStagedEdu() {
 if (aboutEduAddBtn) {
     aboutEduAddBtn.addEventListener('click', () => {
         stagedEdu.push({ course: '', school: '', schoolStart: '', schoolEnd: '', year: '' });
+        _aboutDirty = true; // B-09
         renderStagedEdu();
         if (eduEntriesList) {
             const last = eduEntriesList.lastElementChild;
@@ -2743,6 +2851,7 @@ if (aboutLangAddBtn) {
         }
 
         stagedLangs.push({ language: resolved, level: levelIdx });
+        _aboutDirty = true; // B-09
         renderStagedLangs();
 
         if (aboutLangSearch)   aboutLangSearch.value = '';
@@ -2789,9 +2898,8 @@ async function handleAboutSave() {
             proficiency: stagedLangs,
         };
 
-        await setDoc(doc(_dDb, "portfolio", "about"), aboutDoc);
-
-        // Sync all education entries into portfolio/timestamp
+        // B-06: updateDoc instead of setDoc — won't silently create the doc if missing
+        await updateDoc(doc(_dDb, "portfolio", "about"), aboutDoc);
         try {
             const tsSnap  = await getDoc(doc(_dDb, "portfolio", "timestamp"));
             let tsData    = tsSnap.exists() ? (tsSnap.data().data || []) : [];
@@ -2812,8 +2920,10 @@ async function handleAboutSave() {
                 });
             });
 
-            await setDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
-            FETCHED_TIMELINE = tsData.filter(e => !e.repo);
+            // B-06: Education sync is a full array rebuild — updateDoc instead of setDoc
+            await updateDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
+            FETCHED_TIMELINE   = tsData.filter(e => !e.repo && e.type !== 'milestone');
+            FETCHED_MILESTONES = tsData.filter(e => e.type === 'milestone');
         } catch (tsErr) {
             console.warn('Timeline upsert failed (non-fatal):', tsErr);
         }
@@ -2824,6 +2934,7 @@ async function handleAboutSave() {
         renderTimeline();
 
         setAboutEditStatus('Saved successfully!', 'success');
+        _aboutDirty = false; // B-09: committed to Firestore — no longer dirty
         setTimeout(() => closeAboutEditModal(), 1200);
 
     } catch (err) {
@@ -2834,36 +2945,7 @@ async function handleAboutSave() {
     }
 }
 
-// ── LANG DELETE ───────────────────
-
-async function handleLangDelete(langName) {
-    if (!isEditor) return;
-
-    try {
-        const updated = (FETCHED_ABOUT.proficiency || []).filter(e => e.language !== langName);
-        const aboutDoc = { ...FETCHED_ABOUT, proficiency: updated };
-
-        await setDoc(doc(_dDb, "portfolio", "about"), aboutDoc);
-
-        FETCHED_ABOUT.proficiency = updated;
-
-        skillsAnimated = false;
-        renderSkills();
-        populateStats();
-
-        if (currentSection === 'about') {
-            setTimeout(() => {
-                const barsEl = document.getElementById('skillsBars');
-                if (barsEl) barsEl.classList.add('animated');
-                skillsAnimated = true;
-            }, 100);
-        }
-
-    } catch (err) {
-        console.error('Lang delete error:', err);
-        alert(`Delete failed: ${err.message || 'Unknown error'}`);
-    }
-}
+// handleLangDelete removed — language removal is handled through the About edit modal staged langs UI (stagedLangs.splice + save)
 
 // ── EDU CARD DELETE ───────────────────────────────────────────
 
@@ -2902,7 +2984,8 @@ if (aboutEduDeleteConfirm) {
             }
 
             const aboutDoc = { ...FETCHED_ABOUT, education: eduArr };
-            await setDoc(doc(_dDb, "portfolio", "about"), aboutDoc);
+            // B-06: updateDoc instead of setDoc
+            await updateDoc(doc(_dDb, "portfolio", "about"), aboutDoc);
             FETCHED_ABOUT.education = eduArr;
 
             // Rebuild timeline education entries
@@ -2916,8 +2999,10 @@ if (aboutEduDeleteConfirm) {
                         const timelineDate = (syyyy && smm) ? `${syyyy}-${smm}` : edu.schoolStart;
                         tsData.push({ type: 'education', title: edu.course, date: timelineDate, desc: edu.school || '' });
                     });
-                    await setDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
-                    FETCHED_TIMELINE = tsData.filter(e => !e.repo);
+                    // B-06: Education sync is a full array rebuild — updateDoc instead of setDoc
+                    await updateDoc(doc(_dDb, "portfolio", "timestamp"), { data: tsData });
+                    FETCHED_TIMELINE   = tsData.filter(e => !e.repo && e.type !== 'milestone');
+                    FETCHED_MILESTONES = tsData.filter(e => e.type === 'milestone');
                 }
             } catch (tsErr) {
                 console.warn('Timeline edu remove failed (non-fatal):', tsErr);
@@ -2930,8 +3015,8 @@ if (aboutEduDeleteConfirm) {
         } catch (err) {
             console.error('Edu delete error:', err);
             aboutEduDeleteConfirm.disabled = false;
-            aboutEduDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE';
-            alert(`Delete failed: ${err.message || 'Unknown error'}`);
+            aboutEduDeleteConfirm.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> FAILED';
+            setTimeout(() => { aboutEduDeleteConfirm.innerHTML = '<i class="fa-solid fa-trash"></i> YES, DELETE'; }, 2000);
         }
     });
 }
@@ -2986,8 +3071,20 @@ async function ghDeleteFile(path, commitMessage) {
 
 // ── BOOT ──────────────────────────────────────────────────────
 
+// Q-09: Loading state helpers — adds/removes a CSS class on each section root
+// so the UI can show a skeleton or spinner instead of empty content during fetch.
+const _bootSections = ['homeDocsGrid', 'timelineRoot', 'projectsRoot', 'certsRoot'];
+function _setLoadingState(on) {
+    _bootSections.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('loading', on);
+    });
+}
+
 async function boot() {
+    _setLoadingState(true);
     try { await loadAllData(); }  catch(e) { console.warn('loadAllData failed:', e); }
+    _setLoadingState(false);
     try { renderTimeline(); }     catch(e) { console.warn('renderTimeline failed:', e); }
     try { renderProjects(); }     catch(e) { console.warn('renderProjects failed:', e); }
     try { await renderDocs(); }   catch(e) { console.warn('renderDocs failed:', e); }
@@ -3003,15 +3100,28 @@ async function boot() {
     const verified = await verifyEditorAccess();
     if (verified) {
         isEditor = true;
-        await loadGithubCredentials();
+
+        // GitHub credentials — extracted from cache ONLY after editor is confirmed.
+        // Visitors never reach this block, so GH_TOKEN never enters their JS scope.
+        const gh = _credentialsCache?.github || {};
+        GH_TOKEN = gh.token || null;
+        GH_OWNER = gh.owner || null;
+        GH_REPO  = gh.repo  || null;
+
+        // Clear the cache — the raw credentials object should not linger in memory.
+        _credentialsCache = null;
 
         // Clean up the URL param if present — session is the real gate
         if (_editRequested) {
             window.history.replaceState({}, "", window.location.pathname);
         }
     } else if (_editRequested) {
-        // Had the param but no valid session — strip it
+        // Had the param but no valid session — strip it and clear cache
         window.history.replaceState({}, "", window.location.pathname);
+        _credentialsCache = null;
+    } else {
+        // Visitor session — clear cache so raw credentials don't linger
+        _credentialsCache = null;
     }
     initBadge();
     boot();
@@ -3019,6 +3129,25 @@ async function boot() {
 })();
 
 // ── BADGE DROPDOWN ────────────────────────────────────────────
+
+// Q-10: Global Escape key handler — closes whichever overlay is currently open.
+// Checked in priority order: deepest/most-modal first.
+document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape') return;
+    if (aboutEduDeleteOverlay?.classList.contains('open'))  { closeEduDeleteModal();        return; }
+    if (certDeleteOverlay?.classList.contains('open'))      { closeCertDeleteModal();        return; }
+    if (docDeleteOverlay?.classList.contains('open'))       { closeDocDeleteModal();         return; }
+    if (projectDeleteOverlay?.classList.contains('open'))   { closeProjectDeleteModal();     return; }
+    if (milestoneDeleteOverlay?.classList.contains('open')) { closeMilestoneDeleteModal();   return; }
+    if (certUploadOverlay?.classList.contains('open'))      { closeCertUploadModal();        return; }
+    if (docUploadOverlay?.classList.contains('open'))       { closeDocUploadModal();         return; }
+    if (projectAddOverlay?.classList.contains('open'))      { closeProjectAddModal();        return; }
+    if (milestoneAddOverlay?.classList.contains('open'))    { closeMilestoneAddModal();      return; }
+    if (levelsOverlay?.classList.contains('open'))          { levelsOverlay.classList.remove('open'); return; }
+    if (certOverlay?.classList.contains('open'))            { certOverlay.classList.remove('open');   return; }
+    if (aboutEditOverlay?.classList.contains('open'))       { closeAboutEditModal();         return; }
+    if (faqOverlay?.classList.contains('open'))             { faqOverlay.classList.remove('open');    return; }
+});
 
 const badgeWrap     = document.getElementById('badgeWrap');
 const badgeDropdown = document.getElementById('badgeDropdown');
@@ -3069,9 +3198,31 @@ if (faqOverlay) {
     });
 }
 
+// B-09: warn before unload while in edit mode (browser back, tab close, etc.)
+function _onBeforeUnload(e) {
+    e.preventDefault();
+    e.returnValue = '';
+}
+
 if (menuEdit) {
     menuEdit.addEventListener('click', () => {
         badgeWrap.classList.remove('open');
+
+        if (isEditMode) {
+            // B-09: guard exit — warn if about modal has unsaved changes
+            if (_aboutDirty && aboutEditOverlay?.classList.contains('open')) {
+                const go = confirm(
+                    'You have unsaved changes in the About editor.\n' +
+                    'Exit edit mode anyway? Your changes will be lost.'
+                );
+                if (!go) return;
+            }
+            window.removeEventListener('beforeunload', _onBeforeUnload);
+        } else {
+            // Entering edit mode — register unload guard
+            window.addEventListener('beforeunload', _onBeforeUnload);
+        }
+
         setEditMode(!isEditMode);
         menuEdit.innerHTML = isEditMode
             ? '<i class="fa-solid fa-pen-to-square"></i> EXIT EDIT'

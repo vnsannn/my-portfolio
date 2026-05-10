@@ -76,19 +76,20 @@
                     <p class="hero-nickname">but you can call me<span class="hero-nickname-vien"> Vien </span>for casual greetings or<span class="hero-nickname-vien"> Mr. Calderon </span>if you prefer a professional tone. Well, I don't mind either way and it doesn't bother me.</p>
 
                     <div class="hero-socials" id="heroSocials">
-                        <a href="https://www.facebook.com/vnsan15" target="_blank" class="social-btn-icon" title="Facebook">
+                        <a href="https://www.facebook.com/vnsan15" target="_blank" rel="noopener noreferrer" class="social-btn-icon" title="Facebook">
                             <i class="fa-brands fa-facebook-f"></i>
                         </a>
-                        <a href="https://t.me/devsss_t" target="_blank" class="social-btn-icon" title="Telegram">
+                        <a href="https://t.me/devsss_t" target="_blank" rel="noopener noreferrer" class="social-btn-icon" title="Telegram">
                             <i class="fa-brands fa-telegram"></i>
                         </a>
-                        <a href="https://github.com/devssst" target="_blank" class="social-btn-icon" title="GitHub">
+                        <a href="https://github.com/devssst" target="_blank" rel="noopener noreferrer" class="social-btn-icon" title="GitHub">
                             <i class="fa-brands fa-github"></i>
                         </a>
-                        <a href="https://x.com/vnsannn" target="_blank" class="social-btn-icon" title="Twitter / X">
+                        <a href="https://x.com/vnsannn" target="_blank" rel="noopener noreferrer" class="social-btn-icon" title="Twitter / X">
                             <i class="fa-brands fa-x-twitter"></i>
                         </a>
-                        <a href="#" target="_blank" class="social-btn-icon" title="Discord">
+                        <!-- B-05: Discord hidden until invite URL is ready -->
+                        <a href="#" rel="noopener noreferrer" class="social-btn-icon" title="Discord" style="display:none" aria-hidden="true">
                             <i class="fa-brands fa-discord"></i>
                         </a>
                     </div>
@@ -115,11 +116,12 @@
                 <div class="profile-card-name">Vien Fritzgerald V. Calderon</div>
                 <div class="profile-card-eyebrow">DEVELOPER · STUDENT · TINKERER</div>
                 <div class="profile-card-socials">
-                    <a href="https://www.facebook.com/vnsan15" target="_blank" class="social-btn-icon" title="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
-                    <a href="https://t.me/devsss_t" target="_blank" class="social-btn-icon" title="Telegram"><i class="fa-brands fa-telegram"></i></a>
-                    <a href="https://github.com/devssst" target="_blank" class="social-btn-icon" title="GitHub"><i class="fa-brands fa-github"></i></a>
-                    <a href="https://x.com/vnsannn" target="_blank" class="social-btn-icon" title="Twitter / X"><i class="fa-brands fa-x-twitter"></i></a>
-                    <a href="#" target="_blank" class="social-btn-icon" title="Discord"><i class="fa-brands fa-discord"></i></a>
+                    <a href="https://www.facebook.com/vnsan15" target="_blank" rel="noopener noreferrer" class="social-btn-icon" title="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
+                    <a href="https://t.me/devsss_t" target="_blank" rel="noopener noreferrer" class="social-btn-icon" title="Telegram"><i class="fa-brands fa-telegram"></i></a>
+                    <a href="https://github.com/devssst" target="_blank" rel="noopener noreferrer" class="social-btn-icon" title="GitHub"><i class="fa-brands fa-github"></i></a>
+                    <a href="https://x.com/vnsannn" target="_blank" rel="noopener noreferrer" class="social-btn-icon" title="Twitter / X"><i class="fa-brands fa-x-twitter"></i></a>
+                    <!-- B-05: Discord hidden until invite URL is ready -->
+                    <a href="#" rel="noopener noreferrer" class="social-btn-icon" title="Discord" style="display:none" aria-hidden="true"><i class="fa-brands fa-discord"></i></a>
                 </div>
             </div>
 
@@ -191,22 +193,8 @@
 
         <!-- TIMELINE -->
         <section class="dash-section" id="section-timeline">
-            <!-- LEFT PROFILE CARD (cloned by JS) -->
-            <div class="profile-card profile-card-clone" id="profileCardTimeline">
-                <button class="profile-card-collapse profile-card-collapse-clone" title="Collapse">
-                    <i class="fa-solid fa-chevron-left"></i>
-                </button>
-                <img src="../assets/images/picture.jpeg" alt="Vien Calderon" class="profile-card-avatar">
-                <div class="profile-card-name">Vien Fritzgerald V. Calderon</div>
-                <div class="profile-card-eyebrow">DEVELOPER · STUDENT · TINKERER</div>
-                <div class="profile-card-socials">
-                    <a href="https://www.facebook.com/vnsan15" target="_blank" class="social-btn-icon" title="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
-                    <a href="https://t.me/devsss_t" target="_blank" class="social-btn-icon" title="Telegram"><i class="fa-brands fa-telegram"></i></a>
-                    <a href="https://github.com/devssst" target="_blank" class="social-btn-icon" title="GitHub"><i class="fa-brands fa-github"></i></a>
-                    <a href="https://x.com/vnsannn" target="_blank" class="social-btn-icon" title="Twitter / X"><i class="fa-brands fa-x-twitter"></i></a>
-                    <a href="#" target="_blank" class="social-btn-icon" title="Discord"><i class="fa-brands fa-discord"></i></a>
-                </div>
-            </div>
+            <!-- LEFT PROFILE CARD (injected by JS — B-03 fix) -->
+            <div id="profileCardTimeline"></div>
             <button class="profile-card-expand-btn profile-card-expand-btn-clone" id="profileCardExpandBtnTimeline" title="Show profile">
                 <i class="fa-solid fa-chevron-right"></i>
             </button>
@@ -226,22 +214,8 @@
 
         <!-- PROJECTS -->
         <section class="dash-section" id="section-projects">
-            <!-- LEFT PROFILE CARD (clone) -->
-            <div class="profile-card profile-card-clone" id="profileCardProjects">
-                <button class="profile-card-collapse profile-card-collapse-clone" title="Collapse">
-                    <i class="fa-solid fa-chevron-left"></i>
-                </button>
-                <img src="../assets/images/picture.jpeg" alt="Vien Calderon" class="profile-card-avatar">
-                <div class="profile-card-name">Vien Fritzgerald V. Calderon</div>
-                <div class="profile-card-eyebrow">DEVELOPER · STUDENT · TINKERER</div>
-                <div class="profile-card-socials">
-                    <a href="https://www.facebook.com/vnsan15" target="_blank" class="social-btn-icon" title="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
-                    <a href="https://t.me/devsss_t" target="_blank" class="social-btn-icon" title="Telegram"><i class="fa-brands fa-telegram"></i></a>
-                    <a href="https://github.com/devssst" target="_blank" class="social-btn-icon" title="GitHub"><i class="fa-brands fa-github"></i></a>
-                    <a href="https://x.com/vnsannn" target="_blank" class="social-btn-icon" title="Twitter / X"><i class="fa-brands fa-x-twitter"></i></a>
-                    <a href="#" target="_blank" class="social-btn-icon" title="Discord"><i class="fa-brands fa-discord"></i></a>
-                </div>
-            </div>
+            <!-- LEFT PROFILE CARD (injected by JS — B-03 fix) -->
+            <div id="profileCardProjects"></div>
             <button class="profile-card-expand-btn profile-card-expand-btn-clone" id="profileCardExpandBtnProjects" title="Show profile">
                 <i class="fa-solid fa-chevron-right"></i>
             </button>
@@ -261,22 +235,8 @@
 
         <!-- CERTIFICATES -->
         <section class="dash-section" id="section-certificates">
-            <!-- LEFT PROFILE CARD (clone) -->
-            <div class="profile-card profile-card-clone" id="profileCardCertificates">
-                <button class="profile-card-collapse profile-card-collapse-clone" title="Collapse">
-                    <i class="fa-solid fa-chevron-left"></i>
-                </button>
-                <img src="../assets/images/picture.jpeg" alt="Vien Calderon" class="profile-card-avatar">
-                <div class="profile-card-name">Vien Fritzgerald V. Calderon</div>
-                <div class="profile-card-eyebrow">DEVELOPER · STUDENT · TINKERER</div>
-                <div class="profile-card-socials">
-                    <a href="https://www.facebook.com/vnsan15" target="_blank" class="social-btn-icon" title="Facebook"><i class="fa-brands fa-facebook-f"></i></a>
-                    <a href="https://t.me/devsss_t" target="_blank" class="social-btn-icon" title="Telegram"><i class="fa-brands fa-telegram"></i></a>
-                    <a href="https://github.com/devssst" target="_blank" class="social-btn-icon" title="GitHub"><i class="fa-brands fa-github"></i></a>
-                    <a href="https://x.com/vnsannn" target="_blank" class="social-btn-icon" title="Twitter / X"><i class="fa-brands fa-x-twitter"></i></a>
-                    <a href="#" target="_blank" class="social-btn-icon" title="Discord"><i class="fa-brands fa-discord"></i></a>
-                </div>
-            </div>
+            <!-- LEFT PROFILE CARD (injected by JS — B-03 fix) -->
+            <div id="profileCardCertificates"></div>
             <button class="profile-card-expand-btn profile-card-expand-btn-clone" id="profileCardExpandBtnCertificates" title="Show profile">
                 <i class="fa-solid fa-chevron-right"></i>
             </button>
@@ -667,6 +627,11 @@
     <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script type="module" src="../assets/js/dashboard.js"></script>
+    <!-- Q-08: noscript fallback — entire site requires JS -->
+    <noscript>
+        <style>body { display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #0a0a14; font-family: sans-serif; color: rgba(255,255,255,0.6); text-align: center; }</style>
+        <p>This portfolio requires JavaScript to run.<br>Please enable it in your browser settings.</p>
+    </noscript>
 </body>
 
 </html>

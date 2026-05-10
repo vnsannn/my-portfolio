@@ -17,6 +17,7 @@
     --transition:    0.3s ease;
     --profile-w:     220px;
     --profile-gap:   32px;
+    --font-display:  Arial, Helvetica, sans-serif; /* Q-06: replaces ~12 hardcoded font-family declarations */
 }
 
 body {
@@ -38,6 +39,13 @@ body::before {
     z-index: 0;
     pointer-events: none;
     backdrop-filter: blur(6px);
+}
+
+/* Q-09: boot() loading state — dims section roots while data fetches */
+.loading {
+    opacity: 0.4;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
 }
 
 /* HEADER */
@@ -105,11 +113,12 @@ body::before {
     text-decoration: none;
     padding: 6px 14px;
     border-radius: 8px;
-    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+    transition: font-size 0.2s ease, color 0.2s, background 0.2s, box-shadow 0.2s;
     white-space: nowrap;
 }
 
 .nav-link:hover {
+    font-size: 11px;
     color: rgba(255, 255, 255, 0.9);
     background: rgba(255, 255, 255, 0.1);
 }
@@ -118,6 +127,10 @@ body::before {
     font-size: 12px;
     color: #fff;
     background: rgba(168, 85, 247, 0.25);
+}
+
+.nav-link.active:hover {
+    font-size: 12px;
 }
 
 /* RIGHT MODE BADGE */
@@ -206,7 +219,7 @@ body::before {
     letter-spacing: -0.02em;
     color: #fff;
     line-height: 1;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
 }
 /* HOME SECTION */
 #section-home {
@@ -285,7 +298,7 @@ body::before {
     font-weight: 800;
     letter-spacing: -0.03em;
     line-height: 1.1;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
     text-shadow: 0 2px 16px rgba(0,0,0,0.7);
 }
 
@@ -293,7 +306,7 @@ body::before {
     color: rgba(255, 255, 255, 0.6);
     font-weight: 900;
     font-size: 44px;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
 
 }
 
@@ -301,13 +314,13 @@ body::before {
     color: rgba(255, 255, 255, 0.6);
     font-weight: 900;
     font-size: 44px;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
 }
 
 .hero-name-accent {
     color: #ffffff;
     font-weight: 900;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
 }
 
 .hero-nickname {
@@ -323,7 +336,7 @@ body::before {
     font-weight: 800;
     font-size: 16px;
     text-shadow: 0 0 20px rgba(168,85,247,0.55), 0 1px 8px rgba(0,0,0,0.5);
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
 }
 
 
@@ -392,7 +405,7 @@ body::before {
     position: relative;
     width: 220px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.001);
+    background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.15);
     overflow: hidden;
     cursor: pointer;
@@ -465,7 +478,7 @@ body::before {
 .doc-card-title {
     font-size: 16px;
     font-weight: 900;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
     color: rgb(190, 190, 190);
     line-height: 1.3;
     margin-bottom: 5px;
@@ -557,7 +570,7 @@ body::before {
     align-items: center;
     padding: 36px 20px 28px;
     gap: 10px;
-    background: rgba(255, 255, 255, 0.001);
+    background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 20px;
     box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45),
@@ -617,7 +630,7 @@ body::before {
 
 .profile-card-name {
     font-size: 18px;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
     font-weight: 900;
     color: rgb(190, 190, 190);
     text-align: center;
@@ -739,8 +752,8 @@ body::before {
     font-weight: 500;
     color: rgba(255, 255, 255, 0.8);
     line-height: 1.8;
-    max-width: 100vw;
-    text-align: justify;
+    /* Q-03: removed max-width: 100vw — parent container already constrains width */
+    text-align: left; /* U-01: justify causes uneven word rivers on screen */
     margin-top: -16px;
 }
 
@@ -794,7 +807,7 @@ body::before {
 .about-edu-degree {
     font-size: 16px;
     font-weight: 900;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
     color: rgb(190, 190, 190);
     margin-bottom: 4px;
 }
@@ -1115,7 +1128,7 @@ body::before {
     display: flex;
     flex-direction: column;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.001);
+    background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.08);
     overflow: hidden;
     transition: background 0.2s, border-color 0.2s, transform 0.2s, box-shadow 0.2s;
@@ -1145,7 +1158,7 @@ body::before {
 .timeline-entry-title {
     font-size: 14px;
     font-weight: 800;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
     color: rgb(190, 190, 190);
 }
 
@@ -1240,7 +1253,7 @@ body::before {
 .project-card {
     position: relative;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.001);
+    background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.08);
     overflow: hidden;
     cursor: pointer;
@@ -1426,7 +1439,7 @@ body::before {
     font-weight: 900;
     color: rgb(190, 190, 190);
     line-height: 1.3;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
 }
 
 .project-desc {
@@ -1576,7 +1589,7 @@ body::before {
 }
 
 .reach-field textarea {
-    text-align: justify;
+    text-align: left; /* U-01: justify causes uneven word rivers on screen */
 }
 
 .reach-field input::placeholder,
@@ -1878,7 +1891,7 @@ body::before {
     position: relative;
     width: 220px;
     border-radius: 14px;
-    background: rgba(255, 255, 255, 0.001);
+    background: transparent;
     border: 1px solid rgba(255, 255, 255, 0.15);
     overflow: hidden;
     cursor: pointer;
@@ -1925,7 +1938,7 @@ body::before {
     font-weight: 900;
     color: rgb(190, 190, 190);
     line-height: 1.3;
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: var(--font-display); /* Q-06 */
     margin-bottom: 5px;
 }
 
@@ -1948,7 +1961,7 @@ body::before {
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.88);
-    z-index: 200;
+    z-index: 500; /* U-03: was 200, raised to match faq-overlay/levels-overlay */
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2856,7 +2869,7 @@ body::before {
 .about-edit-field textarea {
     min-height: 100px;
     resize: vertical;
-    text-align: justify;
+    text-align: left; /* U-01: justify causes uneven word rivers on screen */
 }
 
 .about-edit-field input[type="date"] {
