@@ -68,8 +68,8 @@ if (backBtn && visitorSection && modeLabel && devSection) {
         setTimeout(() => {
             visitorSection.classList.remove("hidden");
             modeLabel.textContent = "VISITOR";
-            document.getElementById("email").value    = "";
-            document.getElementById("password").value = "";
+            emailInput.value    = "";
+            passwordInput.value = "";
         }, 200);
     });
 }
